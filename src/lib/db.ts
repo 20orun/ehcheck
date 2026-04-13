@@ -1,0 +1,264 @@
+import { supabase } from './supabase'
+import type { Department, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority } from '@/types'
+
+// ─── Fetch helpers ───────────────────────────────────
+
+export async function fetchDepartments(): Promise<Department[]> {
+  const { data, error } = await supabase
+    .from('departments')
+    .select('id, name, task_group')
+    .order('name')
+  if (error) throw error
+  return (data ?? []).map((d) => ({
+    id: d.id,
+    name: d.name,
+    task_group: d.task_group as TaskGroup,
+  }))
+}
+
+export async function fetchPackages(): Promise<Package[]> {
+  const { data, error } = await supabase
+    .from('packages')
+    .select('id, name, tracker_blood_sample, tracker_usg, tracker_breakfast, tracker_ppbs, tracker_xray, tracker_mammography, tracker_bmd, tracker_ecg, tracker_echo, tracker_tmt, tracker_pft, tracker_lunch, tracker_consultation, tracker_dental')
+    .order('name')
+  if (error) throw error
+  return (data ?? []) as Package[]
+}
+
+export async function fetchPackageSteps(): Promise<PackageStep[]> {
+  const { data, error } = await supabase
+    .from('package_steps')
+    .select('id, package_id, step_name, department_id, step_order, task_group, is_mandatory')
+    .order('package_id')
+    .order('step_order')
+  if (error) throw error
+  return (data ?? []).map((s) => ({
+    id: s.id,
+    package_id: s.package_id,
+    step_name: s.step_name,
+    department_id: s.department_id,
+    step_order: s.step_order,
+    task_group: s.task_group as TaskGroup,
+    is_mandatory: s.is_mandatory,
+  }))
+}
+
+export async function fetchPatients(): Promise<Patient[]> {
+  const { data, error } = await supabase
+    .from('patients')
+    .select('id, name, uhid, package_id, priority, created_at, checked_in_at')
+    .order('created_at')
+  if (error) throw error
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    uhid: p.uhid,
+    package_id: p.package_id,
+    priority: p.priority as Priority,
+    created_at: p.created_at,
+    checked_in_at: p.checked_in_at ?? null,
+  }))
+}
+
+export async function fetchPatientTasks(): Promise<PatientTask[]> {
+  const { data, error } = await supabase
+    .from('patient_tasks')
+    .select('id, patient_id, step_id, department_id, task_group, status, is_mandatory, skipped, started_at, completed_at, step_order, step_name')
+    .order('patient_id')
+    .order('step_order')
+  if (error) throw error
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    patient_id: t.patient_id,
+    step_id: t.step_id,
+    department_id: t.department_id,
+    task_group: t.task_group as TaskGroup,
+    status: t.status as TaskStatus,
+    is_mandatory: t.is_mandatory,
+    skipped: t.skipped,
+    started_at: t.started_at,
+    completed_at: t.completed_at,
+    step_order: t.step_order,
+    step_name: t.step_name,
+  }))
+}
+
+// ─── Load all data at once ───────────────────────────
+
+export interface DbData {
+  departments: Department[]
+  packages: Package[]
+  packageSteps: PackageStep[]
+  patients: Patient[]
+  patientTasks: PatientTask[]
+}
+
+export async function loadAllData(): Promise<DbData> {
+  const [departments, packages, packageSteps, patients, patientTasks] = await Promise.all([
+    fetchDepartments(),
+    fetchPackages(),
+    fetchPackageSteps(),
+    fetchPatients(),
+    fetchPatientTasks(),
+  ])
+  return { departments, packages, packageSteps, patients, patientTasks }
+}
+
+// ─── Write helpers ───────────────────────────────────
+
+export async function insertPatient(patient: Patient): Promise<void> {
+  const { error } = await supabase.from('patients').insert({
+    id: patient.id,
+    name: patient.name,
+    uhid: patient.uhid,
+    package_id: patient.package_id,
+    priority: patient.priority,
+    created_at: patient.created_at,
+    checked_in_at: patient.checked_in_at,
+  })
+  if (error) throw error
+}
+
+export async function insertPatientTasks(tasks: PatientTask[]): Promise<void> {
+  const { error } = await supabase.from('patient_tasks').insert(
+    tasks.map((t) => ({
+      id: t.id,
+      patient_id: t.patient_id,
+      step_id: t.step_id,
+      department_id: t.department_id,
+      task_group: t.task_group,
+      status: t.status,
+      is_mandatory: t.is_mandatory,
+      skipped: t.skipped,
+      started_at: t.started_at,
+      completed_at: t.completed_at,
+      step_order: t.step_order,
+      step_name: t.step_name,
+    }))
+  )
+  if (error) throw error
+}
+
+export async function updateTaskStatus(
+  taskId: string,
+  status: TaskStatus,
+  timestamp: string
+): Promise<void> {
+  const update: Record<string, unknown> = { status }
+  if (status === 'IN_PROGRESS') update.started_at = timestamp
+  if (status === 'COMPLETED') update.completed_at = timestamp
+  const { error } = await supabase.from('patient_tasks').update(update).eq('id', taskId)
+  if (error) throw error
+}
+
+export async function skipTaskInDb(taskId: string, timestamp: string): Promise<void> {
+  const { error } = await supabase
+    .from('patient_tasks')
+    .update({ status: 'COMPLETED', skipped: true, completed_at: timestamp, started_at: timestamp })
+    .eq('id', taskId)
+  if (error) throw error
+}
+
+export async function updatePatientPriority(patientId: string, priority: Priority): Promise<void> {
+  const { error } = await supabase.from('patients').update({ priority }).eq('id', patientId)
+  if (error) throw error
+}
+
+export async function checkInPatientDb(patientId: string, timestamp: string): Promise<void> {
+  const { error } = await supabase.from('patients').update({ checked_in_at: timestamp }).eq('id', patientId)
+  if (error) throw error
+}
+
+export async function undoCheckInDb(patientId: string): Promise<void> {
+  const { error: patientError } = await supabase
+    .from('patients')
+    .update({ checked_in_at: null })
+    .eq('id', patientId)
+  if (patientError) throw patientError
+
+  const { error: tasksError } = await supabase
+    .from('patient_tasks')
+    .update({ status: 'NOT_STARTED', started_at: null, completed_at: null, skipped: false })
+    .eq('patient_id', patientId)
+  if (tasksError) throw tasksError
+}
+
+export async function deletePatientDb(patientId: string): Promise<void> {
+  const { error: tasksError } = await supabase
+    .from('patient_tasks')
+    .delete()
+    .eq('patient_id', patientId)
+  if (tasksError) throw tasksError
+
+  const { error: patientError } = await supabase
+    .from('patients')
+    .delete()
+    .eq('id', patientId)
+  if (patientError) throw patientError
+}
+
+export async function updatePatientPackageDb(
+  patientId: string,
+  packageId: string,
+  newTasks: PatientTask[]
+): Promise<void> {
+  // Update the patient's package
+  const { error: pkgError } = await supabase
+    .from('patients')
+    .update({ package_id: packageId })
+    .eq('id', patientId)
+  if (pkgError) throw pkgError
+
+  // Delete old tasks
+  const { error: delError } = await supabase
+    .from('patient_tasks')
+    .delete()
+    .eq('patient_id', patientId)
+  if (delError) throw delError
+
+  // Insert new tasks
+  const { error: insError } = await supabase.from('patient_tasks').insert(
+    newTasks.map((t) => ({
+      id: t.id,
+      patient_id: t.patient_id,
+      step_id: t.step_id,
+      department_id: t.department_id,
+      task_group: t.task_group,
+      status: t.status,
+      is_mandatory: t.is_mandatory,
+      skipped: t.skipped,
+      started_at: t.started_at,
+      completed_at: t.completed_at,
+      step_order: t.step_order,
+      step_name: t.step_name,
+    }))
+  )
+  if (insError) throw insError
+}
+
+export async function cancelTaskDb(taskId: string): Promise<void> {
+  const { error } = await supabase
+    .from('patient_tasks')
+    .update({ status: 'NOT_STARTED', started_at: null, completed_at: null })
+    .eq('id', taskId)
+  if (error) throw error
+}
+
+export async function resetAllData(): Promise<DbData> {
+  // Reset all patient tasks to NOT_STARTED
+  const { error: tasksError } = await supabase
+    .from('patient_tasks')
+    .update({ status: 'NOT_STARTED', started_at: null, completed_at: null, skipped: false })
+    .not('id', 'is', null)
+  if (tasksError) throw tasksError
+
+  // Clear all patient check-ins
+  const { error: patientsError } = await supabase
+    .from('patients')
+    .update({ checked_in_at: null })
+    .not('id', 'is', null)
+  if (patientsError) throw patientsError
+
+  // Re-fetch everything
+  return loadAllData()
+}
