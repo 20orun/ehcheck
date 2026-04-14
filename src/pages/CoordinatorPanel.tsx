@@ -25,6 +25,7 @@ const GROUP_LABELS: Record<TaskGroup, string> = {
   LAB: 'Lab',
   IMAGING: 'Imaging',
   CARDIAC: 'Cardiac',
+  PULMONARY: 'Pulmonary',
   CONSULT: 'Consult',
 }
 

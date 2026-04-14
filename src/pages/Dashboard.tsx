@@ -11,6 +11,7 @@ const GROUP_LABELS: Record<string, string> = {
   LAB: 'Lab',
   IMAGING: 'Imaging',
   CARDIAC: 'Cardiac',
+  PULMONARY: 'Pulmonary',
   CONSULT: 'Consult',
 }
 

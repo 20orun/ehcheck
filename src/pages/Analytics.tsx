@@ -28,10 +28,10 @@ export default function Analytics() {
       completed.length > 0
         ? Math.round(
             completed.reduce((sum, p) => {
-              const startTimes = p.tasks.filter((t) => t.started_at).map((t) => new Date(t.started_at!).getTime())
+              const checkedIn = p.checked_in_at ? new Date(p.checked_in_at).getTime() : null
               const endTimes = p.tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
-              if (startTimes.length && endTimes.length) {
-                return sum + (Math.max(...endTimes) - Math.min(...startTimes)) / 60000
+              if (checkedIn && endTimes.length) {
+                return sum + (Math.max(...endTimes) - checkedIn) / 60000
               }
               return sum
             }, 0) / completed.length

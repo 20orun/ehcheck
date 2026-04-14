@@ -7,7 +7,7 @@ const DEPT_TO_GROUP: Record<string, TaskGroup> = {
   'dept-lab': 'LAB',
   'dept-rad': 'IMAGING',
   'dept-card': 'CARDIAC',
-  'dept-pulm': 'BILLING',
+  'dept-pulm': 'PULMONARY',
   'dept-phys': 'CONSULT',
   'dept-rev': 'CONSULT',
 }
@@ -24,6 +24,7 @@ const GROUP_PRIORITY_WEIGHT: Record<TaskGroup, number> = {
   LAB: 3,
   IMAGING: 4,
   CARDIAC: 4,
+  PULMONARY: 5,
   CONSULT: 8,
 }
 
@@ -44,7 +45,7 @@ export function isValidTransition(from: TaskStatus, to: TaskStatus): boolean {
 export function arePrerequisitesMet(task: PatientTask, allPatientTasks: PatientTask[]): boolean {
   if (task.task_group !== 'CONSULT') return true
 
-  const prereqGroups: TaskGroup[] = ['LAB', 'IMAGING', 'CARDIAC']
+  const prereqGroups: TaskGroup[] = ['LAB', 'IMAGING', 'CARDIAC', 'PULMONARY']
   const mandatoryPrereqs = allPatientTasks.filter(
     (t) => prereqGroups.includes(t.task_group) && t.is_mandatory
   )
@@ -195,7 +196,7 @@ export function deriveGroupStatus(tasks: PatientTask[]): TaskStatus {
 }
 
 export function getTaskGroupStatuses(tasks: PatientTask[]): TaskGroupStatus[] {
-  const groups: TaskGroup[] = ['BILLING', 'CHECK_IN', 'NURSING', 'LAB', 'IMAGING', 'CARDIAC', 'CONSULT']
+  const groups: TaskGroup[] = ['BILLING', 'CHECK_IN', 'NURSING', 'LAB', 'IMAGING', 'CARDIAC', 'PULMONARY', 'CONSULT']
 
   return groups
     .map((group) => {

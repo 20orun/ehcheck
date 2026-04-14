@@ -33,7 +33,7 @@ const TRACKER_STEP_MAP: Record<string, { dept: string; stepName: string; group: 
   tracker_ecg: { dept: 'dept-card', stepName: 'ECG', group: 'CARDIAC' },
   tracker_echo: { dept: 'dept-card', stepName: 'Echo', group: 'CARDIAC' },
   tracker_tmt: { dept: 'dept-card', stepName: 'TMT', group: 'CARDIAC' },
-  tracker_pft: { dept: 'dept-pulm', stepName: 'PFT', group: 'BILLING' },
+  tracker_pft: { dept: 'dept-pulm', stepName: 'PFT', group: 'PULMONARY' },
 }
 
 function generateStepsFromTrackers(packageId: string, trackers: Record<string, string>): PackageStep[] {
