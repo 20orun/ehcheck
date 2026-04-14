@@ -121,7 +121,9 @@ export default function CoordinatorPanel() {
     }
     if (sortBy === 'waitTime') {
       // Longest wait first; not-checked-in patients go to the bottom
-      return b.waitingMinutes - a.waitingMinutes || a.name.localeCompare(b.name)
+      const aTime = a.checked_in_at ? new Date(a.checked_in_at).getTime() : Infinity
+      const bTime = b.checked_in_at ? new Date(b.checked_in_at).getTime() : Infinity
+      return aTime - bTime || a.name.localeCompare(b.name)
     }
     // Default: priority (VIP first), then alphabetical
     if (a.priority !== b.priority) return a.priority === 'VIP' ? -1 : 1
