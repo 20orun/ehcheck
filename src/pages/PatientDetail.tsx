@@ -4,8 +4,9 @@ import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
 import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
-import type { TaskGroup, PatientTask } from '@/types'
+import type { TaskGroup, PatientTask, DoctorCode } from '@/types'
 import { getTaskGroupStatuses, isPatientComplete, getAvailableTasks } from '@/lib/taskEngine'
+import { DOCTORS } from '@/types'
 
 const GROUP_LABELS: Record<TaskGroup, string> = {
   BILLING: 'Billing',
@@ -76,6 +77,7 @@ export default function PatientDetail() {
   const elapsed = useElapsedTimer(patient?.checked_in_at ?? null, lastCompletedAt)
   const [billingTaskId, setBillingTaskId] = useState<string | null>(null)
   const [billingPkgSearch, setBillingPkgSearch] = useState('')
+  const [billingSelectedPkgId, setBillingSelectedPkgId] = useState<string | null>(null)
   const [editingCheckIn, setEditingCheckIn] = useState(false)
   const [checkInTimeInput, setCheckInTimeInput] = useState('')
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -520,7 +522,7 @@ export default function PatientDetail() {
       })()}
 
       {/* Package Selection Modal for Billing */}
-      {billingTaskId && (
+      {billingTaskId && !billingSelectedPkgId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[80vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
@@ -551,12 +553,13 @@ export default function PatientDetail() {
                     key={pkg.id}
                     onClick={() => {
                       if (!isCurrent) {
-                        updatePatientPackage(patient.id, pkg.id)
+                        setBillingSelectedPkgId(pkg.id)
+                        setBillingPkgSearch('')
                       } else {
-                        completeTask(billingTaskId)
+                        // Same package – go to doctor selection too
+                        setBillingSelectedPkgId(pkg.id)
+                        setBillingPkgSearch('')
                       }
-                      setBillingTaskId(null)
-                      setBillingPkgSearch('')
                     }}
                     className={clsx(
                       'w-full text-left px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-between',
@@ -576,6 +579,53 @@ export default function PatientDetail() {
               {filteredBillingPackages.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-4">No packages found</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Doctor Selection Modal (step 2 of billing) */}
+      {billingTaskId && billingSelectedPkgId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <h3 className="text-lg font-semibold text-gray-900">Assign Doctor</h3>
+              <button
+                onClick={() => { setBillingTaskId(null); setBillingSelectedPkgId(null); setBillingPkgSearch('') }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 grid grid-cols-1 gap-3">
+              {DOCTORS.map((doc) => (
+                <button
+                  key={doc.code}
+                  onClick={() => {
+                    const isCurrent = billingSelectedPkgId === patient.package_id
+                    if (!isCurrent) {
+                      updatePatientPackage(patient.id, billingSelectedPkgId, doc.code)
+                    } else {
+                      updatePatientPackage(patient.id, billingSelectedPkgId, doc.code)
+                    }
+                    setBillingTaskId(null)
+                    setBillingSelectedPkgId(null)
+                    setBillingPkgSearch('')
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 hover:border-primary-400 hover:bg-primary-50 hover:shadow-md transition-all flex items-center gap-3"
+                >
+                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary-100 text-primary-700 font-bold text-lg">
+                    {doc.code}
+                  </span>
+                  <span className="text-sm font-semibold text-gray-800">{doc.name}</span>
+                </button>
+              ))}
+              <button
+                onClick={() => { setBillingSelectedPkgId(null) }}
+                className="mt-1 text-sm text-gray-500 hover:text-gray-700 underline text-center"
+              >
+                Back to package selection
+              </button>
             </div>
           </div>
         </div>

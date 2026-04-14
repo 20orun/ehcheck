@@ -45,11 +45,20 @@ export interface PackageStep {
   is_mandatory: boolean
 }
 
+export type DoctorCode = 'S' | 'A' | 'I' | null
+
+export const DOCTORS: { code: 'S' | 'A' | 'I'; name: string }[] = [
+  { code: 'S', name: 'Dr Sunny P Orathel' },
+  { code: 'A', name: 'Dr Anchu A K' },
+  { code: 'I', name: 'Dr Muhamed Ismail' },
+]
+
 export interface Patient {
   id: string
   name: string
   uhid: string
   package_id: string | null
+  assigned_doctor: DoctorCode
   priority: Priority
   created_at: string
   checked_in_at: string | null

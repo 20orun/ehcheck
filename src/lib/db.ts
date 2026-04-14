@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Department, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority } from '@/types'
+import type { Department, DoctorCode, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority } from '@/types'
 
 // ─── Fetch helpers ───────────────────────────────────
 
@@ -46,7 +46,7 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
   let query = supabase
     .from('patients')
-    .select('id, name, uhid, package_id, priority, created_at, checked_in_at, clinic_date')
+    .select('id, name, uhid, package_id, assigned_doctor, priority, created_at, checked_in_at, clinic_date')
     .order('created_at')
   if (clinicDate) {
     query = query.eq('clinic_date', clinicDate)
@@ -58,6 +58,7 @@ export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
     name: p.name,
     uhid: p.uhid,
     package_id: p.package_id,
+    assigned_doctor: (p.assigned_doctor as DoctorCode) ?? null,
     priority: p.priority as Priority,
     created_at: p.created_at,
     checked_in_at: p.checked_in_at ?? null,
@@ -136,6 +137,7 @@ export async function insertPatient(patient: Patient): Promise<void> {
     name: patient.name,
     uhid: patient.uhid,
     package_id: patient.package_id,
+    assigned_doctor: patient.assigned_doctor,
     priority: patient.priority,
     created_at: patient.created_at,
     checked_in_at: patient.checked_in_at,
@@ -225,12 +227,15 @@ export async function deletePatientDb(patientId: string): Promise<void> {
 export async function updatePatientPackageDb(
   patientId: string,
   packageId: string,
-  newTasks: PatientTask[]
+  newTasks: PatientTask[],
+  assignedDoctor?: DoctorCode
 ): Promise<void> {
-  // Update the patient's package
+  // Update the patient's package and doctor
+  const updateData: Record<string, unknown> = { package_id: packageId }
+  if (assignedDoctor !== undefined) updateData.assigned_doctor = assignedDoctor
   const { error: pkgError } = await supabase
     .from('patients')
-    .update({ package_id: packageId })
+    .update(updateData)
     .eq('id', patientId)
   if (pkgError) throw pkgError
 

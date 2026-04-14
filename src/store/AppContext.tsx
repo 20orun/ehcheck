@@ -11,6 +11,7 @@ import type {
   TaskGroup,
   Priority,
   Department,
+  DoctorCode,
   Package,
   PackageStep,
 } from '@/types'
@@ -69,7 +70,7 @@ type Action =
   | { type: 'DELETE_PATIENT'; payload: { patientId: string } }
   | { type: 'CANCEL_TASK'; payload: { taskId: string } }
   | { type: 'UPDATE_TASK_TIMES'; payload: { taskId: string; startedAt: string | null; completedAt: string | null } }
-  | { type: 'UPDATE_PATIENT_PACKAGE'; payload: { patientId: string; packageId: string; tasks: PatientTask[] } }
+  | { type: 'UPDATE_PATIENT_PACKAGE'; payload: { patientId: string; packageId: string; tasks: PatientTask[]; assignedDoctor?: DoctorCode } }
   | { type: 'ADD_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
   | { type: 'UPDATE_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
   | { type: 'UPDATE_ALERT_CONFIG'; payload: Partial<AlertConfig> }
@@ -173,11 +174,11 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       }
     case 'UPDATE_PATIENT_PACKAGE': {
-      const { patientId, packageId, tasks: newTasks } = action.payload
+      const { patientId, packageId, tasks: newTasks, assignedDoctor } = action.payload
       return {
         ...state,
         patients: state.patients.map((p) =>
-          p.id === patientId ? { ...p, package_id: packageId } : p
+          p.id === patientId ? { ...p, package_id: packageId, ...(assignedDoctor !== undefined ? { assigned_doctor: assignedDoctor } : {}) } : p
         ),
         patientTasks: [
           ...state.patientTasks.filter((t) => t.patient_id !== patientId),
@@ -243,7 +244,7 @@ interface AppContextType {
   completeTask: (taskId: string) => void
   skipTask: (taskId: string) => void
   cancelTask: (taskId: string) => void
-  updatePatientPackage: (patientId: string, packageId: string) => void
+  updatePatientPackage: (patientId: string, packageId: string, assignedDoctor?: DoctorCode) => void
   deletePatient: (patientId: string) => void
   setPriority: (patientId: string, priority: Priority) => void
   checkInPatient: (patientId: string) => void
@@ -646,6 +647,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         name,
         uhid,
         package_id: packageId,
+        assigned_doctor: null,
         priority,
         created_at: new Date().toISOString(),
         checked_in_at: null,
@@ -790,7 +792,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [selectedDate])
 
   const updatePatientPackage = useCallback(
-    (patientId: string, packageId: string) => {
+    (patientId: string, packageId: string, assignedDoctor?: DoctorCode) => {
       if (selectedDate !== getTodayStrNow()) return
       const pkgSteps = state.packageSteps
         .filter((s) => s.package_id === packageId)
@@ -828,8 +830,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
 
-      dispatch({ type: 'UPDATE_PATIENT_PACKAGE', payload: { patientId, packageId, tasks: newTasks } })
-      updatePatientPackageDb(patientId, packageId, newTasks).catch((err) =>
+      dispatch({ type: 'UPDATE_PATIENT_PACKAGE', payload: { patientId, packageId, tasks: newTasks, assignedDoctor } })
+      updatePatientPackageDb(patientId, packageId, newTasks, assignedDoctor).catch((err) =>
         console.warn('Failed to persist package update:', err)
       )
     },
