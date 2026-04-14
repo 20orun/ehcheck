@@ -269,6 +269,18 @@ export async function cancelTaskDb(taskId: string): Promise<void> {
   if (error) throw error
 }
 
+export async function updateTaskTimesDb(
+  taskId: string,
+  startedAt: string | null,
+  completedAt: string | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('patient_tasks')
+    .update({ started_at: startedAt, completed_at: completedAt })
+    .eq('id', taskId)
+  if (error) throw error
+}
+
 export async function resetAllData(): Promise<DbData> {
   // Reset all patient tasks to NOT_STARTED
   const { error: tasksError } = await supabase

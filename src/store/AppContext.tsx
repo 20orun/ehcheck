@@ -39,6 +39,7 @@ import {
   undoCheckInDb,
   deletePatientDb,
   cancelTaskDb,
+  updateTaskTimesDb,
   updatePatientPackageDb,
   insertPackageDb,
   updatePackageDb,
@@ -67,6 +68,7 @@ type Action =
   | { type: 'UNDO_CHECK_IN'; payload: { patientId: string } }
   | { type: 'DELETE_PATIENT'; payload: { patientId: string } }
   | { type: 'CANCEL_TASK'; payload: { taskId: string } }
+  | { type: 'UPDATE_TASK_TIMES'; payload: { taskId: string; startedAt: string | null; completedAt: string | null } }
   | { type: 'UPDATE_PATIENT_PACKAGE'; payload: { patientId: string; packageId: string; tasks: PatientTask[] } }
   | { type: 'ADD_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
   | { type: 'UPDATE_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
@@ -161,6 +163,15 @@ function reducer(state: AppState, action: Action): AppState {
             : t
         ),
       }
+    case 'UPDATE_TASK_TIMES':
+      return {
+        ...state,
+        patientTasks: state.patientTasks.map((t) =>
+          t.id === action.payload.taskId
+            ? { ...t, started_at: action.payload.startedAt, completed_at: action.payload.completedAt }
+            : t
+        ),
+      }
     case 'UPDATE_PATIENT_PACKAGE': {
       const { patientId, packageId, tasks: newTasks } = action.payload
       return {
@@ -238,6 +249,7 @@ interface AppContextType {
   checkInPatient: (patientId: string) => void
   undoCheckIn: (patientId: string) => void
   updateCheckInTime: (patientId: string, timestamp: string) => void
+  updateTaskTimes: (taskId: string, startedAt: string | null, completedAt: string | null) => void
   advancePatient: (patientId: string) => void
   createPackage: (pkg: Package, steps: PackageStep[]) => void
   updatePackage: (pkg: Package, steps: PackageStep[]) => void
@@ -736,6 +748,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
   }, [selectedDate])
 
+  const updateTaskTimes = useCallback((taskId: string, startedAt: string | null, completedAt: string | null) => {
+    if (selectedDate !== getTodayStrNow()) return
+    dispatch({ type: 'UPDATE_TASK_TIMES', payload: { taskId, startedAt, completedAt } })
+    updateTaskTimesDb(taskId, startedAt, completedAt).catch((err) =>
+      console.warn('Failed to persist task times update:', err)
+    )
+  }, [selectedDate])
+
   const cancelTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'CANCEL_TASK', payload: { taskId } })
@@ -897,6 +917,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         checkInPatient,
         undoCheckIn,
         updateCheckInTime,
+        updateTaskTimes,
         advancePatient,
         createPackage,
         updatePackage,

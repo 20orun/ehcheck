@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
 import type { TaskGroup, PatientTask } from '@/types'
@@ -60,7 +60,7 @@ function useElapsedTimer(checkedInAt: string | null, completedAt: string | null)
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, state, updatePatientPackage } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage } = useApp()
   const patient = getPatientById(id!)
 
   // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
@@ -78,6 +78,9 @@ export default function PatientDetail() {
   const [billingPkgSearch, setBillingPkgSearch] = useState('')
   const [editingCheckIn, setEditingCheckIn] = useState(false)
   const [checkInTimeInput, setCheckInTimeInput] = useState('')
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editStartTime, setEditStartTime] = useState('')
+  const [editEndTime, setEditEndTime] = useState('')
 
   const filteredBillingPackages = useMemo(() => {
     if (!billingPkgSearch.trim()) return state.packages
@@ -317,20 +320,98 @@ export default function PatientDetail() {
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-3">
-                        {task.started_at && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(task.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                        {editingTaskId === task.id ? (
+                          <span className="flex items-center gap-2">
+                            <label className="flex items-center gap-1">
+                              <span className="text-gray-400">Start:</span>
+                              <input
+                                type="time"
+                                value={editStartTime}
+                                onChange={(e) => setEditStartTime(e.target.value)}
+                                className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 w-[90px]"
+                              />
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <span className="text-gray-400">End:</span>
+                              <input
+                                type="time"
+                                value={editEndTime}
+                                onChange={(e) => setEditEndTime(e.target.value)}
+                                className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 w-[90px]"
+                              />
+                            </label>
+                            <button
+                              onClick={() => {
+                                const baseDate = task.started_at ? new Date(task.started_at) : new Date()
+                                let newStarted: string | null = null
+                                let newCompleted: string | null = null
+                                if (editStartTime) {
+                                  const [h, m] = editStartTime.split(':').map(Number)
+                                  const d = new Date(baseDate)
+                                  d.setHours(h, m, 0, 0)
+                                  newStarted = d.toISOString()
+                                }
+                                if (editEndTime) {
+                                  const [h, m] = editEndTime.split(':').map(Number)
+                                  const d = new Date(baseDate)
+                                  d.setHours(h, m, 0, 0)
+                                  newCompleted = d.toISOString()
+                                }
+                                updateTaskTimes(task.id, newStarted, newCompleted)
+                                setEditingTaskId(null)
+                              }}
+                              className="inline-flex items-center p-0.5 text-green-600 hover:text-green-800 transition-colors"
+                              title="Save"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setEditingTaskId(null)}
+                              className="inline-flex items-center p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </span>
-                        )}
-                        {task.completed_at && duration !== null && (
-                          <span className="text-green-600">{duration} min</span>
-                        )}
-                        {task.status === 'IN_PROGRESS' && elapsed !== null && (
-                          <span className="text-blue-600 font-medium">In progress {elapsed} min</span>
-                        )}
-                        {task.status === 'DELAYED' && elapsed !== null && (
-                          <span className="text-red-600 font-medium">Delayed {elapsed} min</span>
+                        ) : (
+                          <>
+                            {task.started_at && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(task.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                {task.completed_at && (
+                                  <>
+                                    <span className="text-gray-300">→</span>
+                                    {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                  </>
+                                )}
+                              </span>
+                            )}
+                            {task.completed_at && duration !== null && (
+                              <span className="text-green-600">{duration} min</span>
+                            )}
+                            {task.status === 'IN_PROGRESS' && elapsed !== null && (
+                              <span className="text-blue-600 font-medium">In progress {elapsed} min</span>
+                            )}
+                            {task.status === 'DELAYED' && elapsed !== null && (
+                              <span className="text-red-600 font-medium">Delayed {elapsed} min</span>
+                            )}
+                            {task.started_at && (
+                              <button
+                                onClick={() => {
+                                  setEditingTaskId(task.id)
+                                  const s = task.started_at ? new Date(task.started_at) : null
+                                  const c = task.completed_at ? new Date(task.completed_at) : null
+                                  setEditStartTime(s ? `${String(s.getHours()).padStart(2, '0')}:${String(s.getMinutes()).padStart(2, '0')}` : '')
+                                  setEditEndTime(c ? `${String(c.getHours()).padStart(2, '0')}:${String(c.getMinutes()).padStart(2, '0')}` : '')
+                                }}
+                                className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"
+                                title="Edit times"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -388,6 +469,55 @@ export default function PatientDetail() {
           </div>
         ))}
       </div>
+
+      {/* Adjust Times button – redistributes step times between check-in and final consult */}
+      {(() => {
+        // Find the last CONSULT task that has completed_at
+        const consultTasks = tasks.filter((t) => t.task_group === 'CONSULT' && t.completed_at)
+        const lastConsult = consultTasks.length > 0 ? consultTasks[consultTasks.length - 1] : null
+        const canAdjust = patient.checked_in_at && lastConsult
+        if (!canAdjust) return null
+
+        return (
+          <button
+            onClick={() => {
+              const checkinMs = new Date(patient.checked_in_at!).getTime()
+              const endMs = new Date(lastConsult!.completed_at!).getTime()
+              const totalSpan = endMs - checkinMs
+              if (totalSpan <= 0) return
+
+              // Collect completed tasks after CHECK_IN and up to (including) the final consult, in step_order
+              const targetTasks = tasks.filter(
+                (t) =>
+                  t.task_group !== 'CHECK_IN' &&
+                  t.started_at &&
+                  t.completed_at &&
+                  t.step_order <= lastConsult!.step_order
+              )
+              if (targetTasks.length === 0) return
+
+              // Compute each task's original duration (min 1 min = 60000ms)
+              const durations = targetTasks.map((t) =>
+                Math.max(60000, new Date(t.completed_at!).getTime() - new Date(t.started_at!).getTime())
+              )
+              const totalOriginalDuration = durations.reduce((s, d) => s + d, 0)
+
+              // Distribute proportionally within the total span
+              let cursor = checkinMs
+              targetTasks.forEach((t, i) => {
+                const proportionalDuration = Math.round((durations[i] / totalOriginalDuration) * totalSpan)
+                const newStart = new Date(cursor).toISOString()
+                cursor += proportionalDuration
+                const newEnd = new Date(cursor).toISOString()
+                updateTaskTimes(t.id, newStart, newEnd)
+              })
+            }}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors"
+          >
+            <Wand2 className="w-4 h-4" /> Adjust All Step Times
+          </button>
+        )
+      })()}
 
       {/* Package Selection Modal for Billing */}
       {billingTaskId && (
