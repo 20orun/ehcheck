@@ -638,10 +638,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const registerPatient = useCallback(
     (name: string, uhid: string, packageId: string | null, priority: Priority) => {
-      if (selectedDate !== getTodayStrNow()) return // read-only on past dates
+      if (selectedDate < getTodayStrNow()) return // read-only on past dates
       const patientId = `pat-${crypto.randomUUID()}`
-      const today = new Date()
-      const clinicDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      const clinicDateStr = selectedDate
       const patient: Patient = {
         id: patientId,
         name,
