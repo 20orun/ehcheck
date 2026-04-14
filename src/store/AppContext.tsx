@@ -826,7 +826,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
-      const data = await resetAllData()
+      await resetAllData()
       // Reload only selected date's data
       const dateData = await loadAllData(selectedDate)
       dispatch({ type: 'SET_ALL_DATA', payload: dateData })
