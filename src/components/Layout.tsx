@@ -15,6 +15,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   LogOut,
+  CalendarDays,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useApp } from '@/store/AppContext'
@@ -28,12 +29,13 @@ const NAV_ITEMS = [
   { to: '/tracker', icon: ClipboardList, label: 'Tracker' },
   { to: '/register', icon: UserPlus, label: 'Register' },
   { to: '/packages', icon: PackageIcon, label: 'Packages' },
+  { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
 ]
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const { state, resetData, loading } = useApp()
+  const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
   const { user, signOut } = useAuth()
   const location = useLocation()
 
@@ -192,6 +194,25 @@ export default function Layout() {
 
         {/* Alerts bar – disabled for now */}
 
+        {/* Past date banner */}
+        {isViewingPastDate && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 lg:px-6 py-2 flex items-center gap-2 text-sm text-amber-800">
+            <CalendarDays className="w-4 h-4 shrink-0" />
+            <span>
+              Viewing data from <strong>{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</strong> — read-only
+            </span>
+            <button
+              onClick={() => {
+                const now = new Date()
+                setSelectedDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`)
+              }}
+              className="ml-auto text-xs font-medium bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1 rounded-full transition-colors"
+            >
+              Back to Today
+            </button>
+          </div>
+        )}
+
         {/* Page content */}
         <main className="flex-1 overflow-auto p-4 lg:p-6">
           <Outlet />
@@ -210,5 +231,6 @@ function getPageTitle(path: string): string {
   if (path === '/register') return 'Billing'
   if (path === '/tracker') return 'Patient Tracker'
   if (path === '/packages') return 'Packages'
+  if (path === '/calendar') return 'Calendar'
   return 'ExecuFlow'
 }

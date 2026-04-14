@@ -10,6 +10,7 @@ import Analytics from '@/pages/Analytics'
 import RegisterPatient from '@/pages/RegisterPatient'
 import Tracker from '@/pages/Tracker'
 import Packages from '@/pages/Packages'
+import Calendar from '@/pages/Calendar'
 import Auth from '@/pages/Auth'
 
 function AppRoutes() {
@@ -43,6 +44,7 @@ function AppRoutes() {
           <Route path="/register" element={<RegisterPatient />} />
           <Route path="/tracker" element={<Tracker />} />
           <Route path="/packages" element={<Packages />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

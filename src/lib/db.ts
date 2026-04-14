@@ -43,11 +43,15 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
   }))
 }
 
-export async function fetchPatients(): Promise<Patient[]> {
-  const { data, error } = await supabase
+export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
+  let query = supabase
     .from('patients')
-    .select('id, name, uhid, package_id, priority, created_at, checked_in_at')
+    .select('id, name, uhid, package_id, priority, created_at, checked_in_at, clinic_date')
     .order('created_at')
+  if (clinicDate) {
+    query = query.eq('clinic_date', clinicDate)
+  }
+  const { data, error } = await query
   if (error) throw error
   return (data ?? []).map((p) => ({
     id: p.id,
@@ -57,15 +61,23 @@ export async function fetchPatients(): Promise<Patient[]> {
     priority: p.priority as Priority,
     created_at: p.created_at,
     checked_in_at: p.checked_in_at ?? null,
+    clinic_date: p.clinic_date,
   }))
 }
 
-export async function fetchPatientTasks(): Promise<PatientTask[]> {
-  const { data, error } = await supabase
+export async function fetchPatientTasks(patientIds?: string[]): Promise<PatientTask[]> {
+  let query = supabase
     .from('patient_tasks')
     .select('id, patient_id, step_id, department_id, task_group, status, is_mandatory, skipped, started_at, completed_at, step_order, step_name')
     .order('patient_id')
     .order('step_order')
+  if (patientIds && patientIds.length > 0) {
+    query = query.in('patient_id', patientIds)
+  } else if (patientIds && patientIds.length === 0) {
+    // No patients for this date – return empty
+    return []
+  }
+  const { data, error } = await query
   if (error) throw error
   return (data ?? []).map((t) => ({
     id: t.id,
@@ -93,15 +105,27 @@ export interface DbData {
   patientTasks: PatientTask[]
 }
 
-export async function loadAllData(): Promise<DbData> {
-  const [departments, packages, packageSteps, patients, patientTasks] = await Promise.all([
+export async function loadAllData(clinicDate?: string): Promise<DbData> {
+  const [departments, packages, packageSteps, patients] = await Promise.all([
     fetchDepartments(),
     fetchPackages(),
     fetchPackageSteps(),
-    fetchPatients(),
-    fetchPatientTasks(),
+    fetchPatients(clinicDate),
   ])
+  const patientIds = patients.map((p) => p.id)
+  const patientTasks = await fetchPatientTasks(patientIds)
   return { departments, packages, packageSteps, patients, patientTasks }
+}
+
+/** Get all distinct clinic dates that have patients */
+export async function fetchClinicDates(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('patients')
+    .select('clinic_date')
+    .order('clinic_date', { ascending: false })
+  if (error) throw error
+  const unique = [...new Set((data ?? []).map((r: { clinic_date: string }) => r.clinic_date))]
+  return unique
 }
 
 // ─── Write helpers ───────────────────────────────────
@@ -115,6 +139,7 @@ export async function insertPatient(patient: Patient): Promise<void> {
     priority: patient.priority,
     created_at: patient.created_at,
     checked_in_at: patient.checked_in_at,
+    clinic_date: patient.clinic_date,
   })
   if (error) throw error
 }

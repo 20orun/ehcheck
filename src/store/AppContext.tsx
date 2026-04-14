@@ -29,6 +29,7 @@ import {
 import {
   loadAllData,
   resetAllData,
+  fetchClinicDates,
   insertPatient as dbInsertPatient,
   insertPatientTasks as dbInsertPatientTasks,
   updateTaskStatus as dbUpdateTaskStatus,
@@ -212,6 +213,10 @@ interface AppContextType {
   dispatch: React.Dispatch<Action>
   loading: boolean
   error: string | null
+  selectedDate: string  // YYYY-MM-DD
+  isViewingPastDate: boolean
+  clinicDates: string[]
+  setSelectedDate: (date: string) => void
   // Derived data
   getPatientsWithTasks: () => PatientWithTasks[]
   getPatientsWithCurrentStep: () => PatientWithCurrentStep[]
@@ -260,13 +265,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load data from Supabase on mount
+  // ─── Date-based isolation ────────────────────────
+  const getTodayStr = () => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  }
+  const [selectedDate, setSelectedDateRaw] = useState(getTodayStr)
+  const [clinicDates, setClinicDates] = useState<string[]>([])
+  const isViewingPastDate = selectedDate !== getTodayStr()
+
+  // Load data from Supabase on mount & when selectedDate changes
   useEffect(() => {
     let cancelled = false
-    loadAllData()
-      .then((data) => {
+    setLoading(true)
+    setError(null)
+    Promise.all([
+      loadAllData(selectedDate),
+      fetchClinicDates(),
+    ])
+      .then(([data, dates]) => {
         if (cancelled) return
         dispatch({ type: 'SET_ALL_DATA', payload: data })
+        setClinicDates(dates)
       })
       .catch((err) => {
         if (cancelled) return
@@ -277,7 +297,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
+  }, [selectedDate])
+
+  const setSelectedDate = useCallback((date: string) => {
+    setSelectedDateRaw(date)
   }, [])
+
+  /** Guard: block mutations when viewing a past date */
+  const getTodayStrNow = () => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+  }
 
   // auto-detect delays every 30s
   const intervalRef = useRef<number>(undefined)
@@ -570,7 +600,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const registerPatient = useCallback(
     (name: string, uhid: string, packageId: string | null, priority: Priority) => {
+      if (selectedDate !== getTodayStrNow()) return // read-only on past dates
       const patientId = `pat-${crypto.randomUUID()}`
+      const today = new Date()
+      const clinicDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       const patient: Patient = {
         id: patientId,
         name,
@@ -579,6 +612,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         priority,
         created_at: new Date().toISOString(),
         checked_in_at: null,
+        clinic_date: clinicDateStr,
       }
       let tasks: PatientTask[]
       if (packageId) {
@@ -622,10 +656,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .then(() => dbInsertPatientTasks(tasks))
         .catch((err) => console.warn('Failed to persist patient to DB:', err))
     },
-    [state.packageSteps]
+    [state.packageSteps, selectedDate]
   )
 
   const startTask = useCallback((taskId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     const task = state.patientTasks.find((t) => t.id === taskId)
     if (!task) return
 
@@ -653,9 +688,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dbUpdateTaskStatus(taskId, 'IN_PROGRESS', ts).catch((err) =>
       console.warn('Failed to persist task start:', err)
     )
-  }, [state.patientTasks, state.patients])
+  }, [state.patientTasks, state.patients, selectedDate])
 
   const completeTask = useCallback((taskId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     const ts = new Date().toISOString()
     dispatch({
       type: 'UPDATE_TASK_STATUS',
@@ -664,47 +700,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dbUpdateTaskStatus(taskId, 'COMPLETED', ts).catch((err) =>
       console.warn('Failed to persist task completion:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const skipTask = useCallback((taskId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     const ts = new Date().toISOString()
     dispatch({ type: 'SKIP_TASK', payload: { taskId, timestamp: ts } })
     skipTaskInDb(taskId, ts).catch((err) =>
       console.warn('Failed to persist task skip:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const checkInPatient = useCallback((patientId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     const ts = new Date().toISOString()
     dispatch({ type: 'CHECK_IN', payload: { patientId, timestamp: ts } })
     checkInPatientDb(patientId, ts).catch((err) =>
       console.warn('Failed to persist check-in:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const undoCheckIn = useCallback((patientId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'UNDO_CHECK_IN', payload: { patientId } })
     undoCheckInDb(patientId).catch((err) =>
       console.warn('Failed to persist undo check-in:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const updateCheckInTime = useCallback((patientId: string, timestamp: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'CHECK_IN', payload: { patientId, timestamp } })
     checkInPatientDb(patientId, timestamp).catch((err) =>
       console.warn('Failed to persist check-in time update:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const cancelTask = useCallback((taskId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'CANCEL_TASK', payload: { taskId } })
     cancelTaskDb(taskId).catch((err) =>
       console.warn('Failed to persist task cancel:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const updatePatientPackage = useCallback(
     (patientId: string, packageId: string) => {
+      if (selectedDate !== getTodayStrNow()) return
       const pkgSteps = state.packageSteps
         .filter((s) => s.package_id === packageId)
         .sort((a, b) => a.step_order - b.step_order)
@@ -746,15 +788,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.warn('Failed to persist package update:', err)
       )
     },
-    [state.packageSteps, state.patientTasks]
+    [state.packageSteps, state.patientTasks, selectedDate]
   )
 
   const deletePatient = useCallback((patientId: string) => {
+    if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'DELETE_PATIENT', payload: { patientId } })
     deletePatientDb(patientId).catch((err) =>
       console.warn('Failed to persist patient deletion:', err)
     )
-  }, [])
+  }, [selectedDate])
 
   const setPriority = useCallback((patientId: string, priority: Priority) => {
     dispatch({ type: 'SET_PRIORITY', payload: { patientId, priority } })
@@ -784,18 +827,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       const data = await resetAllData()
-      dispatch({ type: 'SET_ALL_DATA', payload: data })
+      // Reload only selected date's data
+      const dateData = await loadAllData(selectedDate)
+      dispatch({ type: 'SET_ALL_DATA', payload: dateData })
+      const dates = await fetchClinicDates()
+      setClinicDates(dates)
     } catch (err) {
       console.error('Failed to reset data:', err)
       setError(err instanceof Error ? err.message : 'Failed to reset data')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedDate])
 
   // advancePatient: complete current active tasks, use routing engine to start next best task
   const advancePatient = useCallback(
     (patientId: string) => {
+      if (selectedDate !== getTodayStrNow()) return
       const tasks = state.patientTasks.filter((t) => t.patient_id === patientId)
       // Complete all currently active tasks
       const activeTasks = tasks.filter((t) => t.status === 'IN_PROGRESS' || t.status === 'DELAYED')
@@ -816,7 +864,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTimeout(() => startTask(result.task.id), 0)
       }
     },
-    [state.patientTasks, state.patients, completeTask, startTask]
+    [state.patientTasks, state.patients, completeTask, startTask, selectedDate]
   )
 
   return (
@@ -826,6 +874,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch,
         loading,
         error,
+        selectedDate,
+        isViewingPastDate,
+        clinicDates,
+        setSelectedDate,
         getPatientsWithTasks,
         getPatientsWithCurrentStep,
         getPatientById,

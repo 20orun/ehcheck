@@ -53,6 +53,7 @@ export interface Patient {
   priority: Priority
   created_at: string
   checked_in_at: string | null
+  clinic_date: string // YYYY-MM-DD
 }
 
 export interface PatientTask {
