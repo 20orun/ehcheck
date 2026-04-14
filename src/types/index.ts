@@ -3,7 +3,7 @@ export type Priority = 'NORMAL' | 'VIP'
 
 export type TaskStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED'
 
-export type TaskGroup = 'NURSING' | 'LAB' | 'IMAGING' | 'CARDIAC' | 'CONSULT' | 'OTHER'
+export type TaskGroup = 'BILLING' | 'CHECK_IN' | 'NURSING' | 'LAB' | 'IMAGING' | 'CARDIAC' | 'CONSULT'
 
 // Legacy alias
 export type StepStatus = TaskStatus

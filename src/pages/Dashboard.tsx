@@ -5,12 +5,13 @@ import { Clock, Search } from 'lucide-react'
 import { useState } from 'react'
 import type { TaskStatus } from '@/types'
 const GROUP_LABELS: Record<string, string> = {
+  BILLING: 'Billing',
+  CHECK_IN: 'Check In',
   NURSING: 'Nursing',
   LAB: 'Lab',
   IMAGING: 'Imaging',
   CARDIAC: 'Cardiac',
   CONSULT: 'Consult',
-  OTHER: 'Other',
 }
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -36,14 +37,28 @@ export default function Dashboard() {
   const patients = getPatientsWithCurrentStep()
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<string>('priority')
+  const [tatInHours, setTatInHours] = useState(false)
 
   // Derive unique package names for filter tabs
   const packageNames = Array.from(new Set(patients.map((p) => p.package_name).filter(Boolean))) as string[]
 
-  // Sort: VIP first, then by waiting time desc
+  // Sort — stable: tiebreak by name so rows don't jump when task status changes
   const sortedPatients = [...patients].sort((a, b) => {
+    if (sortBy === 'alpha') return a.name.localeCompare(b.name)
+    if (sortBy === 'package') {
+      const cmp = (a.package_name || '').localeCompare(b.package_name || '')
+      return cmp !== 0 ? cmp : a.name.localeCompare(b.name)
+    }
+    if (sortBy === 'waitTime') {
+      const aTime = a.checked_in_at ? new Date(a.checked_in_at).getTime() : Infinity
+      const bTime = b.checked_in_at ? new Date(b.checked_in_at).getTime() : Infinity
+      // Earlier check-in = longer wait = should come first
+      return aTime - bTime || a.name.localeCompare(b.name)
+    }
+    // Default: priority (VIP first), then alphabetical
     if (a.priority !== b.priority) return a.priority === 'VIP' ? -1 : 1
-    return b.waitingMinutes - a.waitingMinutes
+    return a.name.localeCompare(b.name)
   })
 
   const filteredPatients = sortedPatients.filter((p) => {
@@ -102,9 +117,10 @@ export default function Dashboard() {
         <KPICard title="Delayed" value={kpis.delayed} color="red" />
         <KPICard
           title="Avg TAT"
-          value={`${kpis.averageTAT} min`}
+          value={tatInHours ? `${(kpis.averageTAT / 60).toFixed(1)} hr` : `${kpis.averageTAT} min`}
           subtitle={kpis.bottleneckDepartment ? `Bottleneck: ${kpis.bottleneckDepartment}` : undefined}
           color="gray"
+          onClick={() => setTatInHours((v) => !v)}
         />
       </div>
 
@@ -150,6 +166,29 @@ export default function Dashboard() {
             </button>
           )
         })}
+      </div>
+
+      {/* Sort options */}
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <span>Sort by:</span>
+        {[
+          { key: 'priority', label: 'Priority' },
+          { key: 'alpha', label: 'A\u2013Z' },
+          { key: 'package', label: 'Package' },
+          { key: 'waitTime', label: 'Wait Time' },
+        ].map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setSortBy(opt.key)}
+            className={`px-2.5 py-1 rounded-md transition-colors ${
+              sortBy === opt.key
+                ? 'bg-gray-800 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {/* Patient Grid */}

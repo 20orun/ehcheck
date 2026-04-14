@@ -326,10 +326,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Group statuses
       const groupStatuses = getTaskGroupStatuses(tasks)
 
-      // Waiting time: from checked_in_at (when coordinator checked the patient in)
-      const waitingMinutes = p.checked_in_at
-        ? Math.floor((Date.now() - new Date(p.checked_in_at).getTime()) / 60000)
-        : 0
+      // Waiting time: from checked_in_at; freeze at last completion if all mandatory done
+      const allDone = tasks.filter((t) => t.is_mandatory).every((t) => t.status === 'COMPLETED')
+      let waitingMinutes = 0
+      if (p.checked_in_at) {
+        if (allDone) {
+          const completedTimes = tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
+          const endTime = completedTimes.length > 0 ? Math.max(...completedTimes) : Date.now()
+          waitingMinutes = Math.floor((endTime - new Date(p.checked_in_at).getTime()) / 60000)
+        } else {
+          waitingMinutes = Math.floor((Date.now() - new Date(p.checked_in_at).getTime()) / 60000)
+        }
+      }
 
       return {
         ...p,
@@ -368,15 +376,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (p) => !isPatientComplete(p.tasks) && state.patients.find((sp) => sp.id === p.id)?.checked_in_at
     ).length
 
-    // Average TAT for completed patients
+    // Average TAT for completed patients (check-in to last task completion)
     const completedPatients = patients.filter((p) => isPatientComplete(p.tasks))
     const avgTAT =
       completedPatients.length > 0
         ? completedPatients.reduce((sum, p) => {
-            const startTimes = p.tasks.filter((t) => t.started_at).map((t) => new Date(t.started_at!).getTime())
+            const patient = state.patients.find((sp) => sp.id === p.id)
+            const checkedIn = patient?.checked_in_at ? new Date(patient.checked_in_at).getTime() : null
             const endTimes = p.tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
-            if (startTimes.length && endTimes.length) {
-              return sum + (Math.max(...endTimes) - Math.min(...startTimes)) / 60000
+            if (checkedIn && endTimes.length) {
+              return sum + (Math.max(...endTimes) - checkedIn) / 60000
             }
             return sum
           }, 0) / completedPatients.length
@@ -597,7 +606,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           patient_id: patientId,
           step_id: null,
           department_id: 'dept-reg',
-          task_group: 'OTHER' as TaskGroup,
+          task_group: 'BILLING' as TaskGroup,
           status: 'NOT_STARTED' as TaskStatus,
           is_mandatory: true,
           skipped: false,

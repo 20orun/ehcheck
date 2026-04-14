@@ -3,26 +3,27 @@ import type { PatientTask, TaskStatus, TaskGroup, TaskScore, TaskGroupStatus, Pa
 // ─── Task Group Mapping ──────────────────────────────
 // Maps department_id → TaskGroup for the routing engine
 const DEPT_TO_GROUP: Record<string, TaskGroup> = {
-  'dept-reg': 'OTHER',
+  'dept-reg': 'BILLING',
   'dept-lab': 'LAB',
   'dept-rad': 'IMAGING',
   'dept-card': 'CARDIAC',
-  'dept-pulm': 'OTHER',
+  'dept-pulm': 'BILLING',
   'dept-phys': 'CONSULT',
   'dept-rev': 'CONSULT',
 }
 
 export function getDeptTaskGroup(departmentId: string): TaskGroup {
-  return DEPT_TO_GROUP[departmentId] || 'OTHER'
+  return DEPT_TO_GROUP[departmentId] || 'BILLING'
 }
 
 // ─── Priority Weights ────────────────────────────────
 const GROUP_PRIORITY_WEIGHT: Record<TaskGroup, number> = {
-  NURSING: 1,
+  BILLING: 0,
+  CHECK_IN: 1,
+  NURSING: 2,
   LAB: 3,
   IMAGING: 4,
   CARDIAC: 4,
-  OTHER: 5,
   CONSULT: 8,
 }
 
@@ -194,7 +195,7 @@ export function deriveGroupStatus(tasks: PatientTask[]): TaskStatus {
 }
 
 export function getTaskGroupStatuses(tasks: PatientTask[]): TaskGroupStatus[] {
-  const groups: TaskGroup[] = ['NURSING', 'LAB', 'IMAGING', 'CARDIAC', 'CONSULT', 'OTHER']
+  const groups: TaskGroup[] = ['BILLING', 'CHECK_IN', 'NURSING', 'LAB', 'IMAGING', 'CARDIAC', 'CONSULT']
 
   return groups
     .map((group) => {

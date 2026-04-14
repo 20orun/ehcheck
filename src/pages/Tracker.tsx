@@ -68,6 +68,52 @@ function uppercaseName(raw: string): string {
   return raw.toUpperCase()
 }
 
+/** Abbreviate MALE/FEMALE → (M)/(F) and wrap for compact display (prefer ≤2 lines) */
+function wrapPackageName(name: string): string {
+  if (!name) return ''
+  // Abbreviate trailing MALE / FEMALE
+  let text = name.replace(/\s+FEMALE$/i, ' (F)').replace(/\s+MALE$/i, ' (M)')
+
+  const MAX_LINE = 15
+  if (text.length <= MAX_LINE) return text
+
+  const words = text.split(/\s+/)
+  if (words.length <= 1) return text
+
+  // Find the best 2-line split (minimise the longer line)
+  let bestSplit = 1
+  let bestMax = Infinity
+  for (let i = 1; i < words.length; i++) {
+    const maxLen = Math.max(
+      words.slice(0, i).join(' ').length,
+      words.slice(i).join(' ').length,
+    )
+    if (maxLen < bestMax) { bestMax = maxLen; bestSplit = i }
+  }
+
+  if (bestMax <= MAX_LINE + 3) {
+    return words.slice(0, bestSplit).join(' ') + '\n' + words.slice(bestSplit).join(' ')
+  }
+
+  // Fall back to 3 lines only when 2 lines can't fit
+  let best3 = { i: 1, j: 2, max: Infinity }
+  for (let i = 1; i < words.length - 1; i++) {
+    for (let j = i + 1; j < words.length; j++) {
+      const maxLen = Math.max(
+        words.slice(0, i).join(' ').length,
+        words.slice(i, j).join(' ').length,
+        words.slice(j).join(' ').length,
+      )
+      if (maxLen < best3.max) best3 = { i, j, max: maxLen }
+    }
+  }
+  return [
+    words.slice(0, best3.i).join(' '),
+    words.slice(best3.i, best3.j).join(' '),
+    words.slice(best3.j).join(' '),
+  ].join('\n')
+}
+
 function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'center' | 'left' | 'right' = 'center') {
   cell.font = { ...font }
   cell.border = ALL_BORDERS
@@ -134,7 +180,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         startIdx + r + 1,
         patient ? uppercaseName(patient.name) : '',
         patient?.uhid ?? '',
-        patient?.package_name ?? '',
+        wrapPackageName(patient?.package_name ?? ''),
         ...TRACKER_COLS.map((col) => (patient ? getTrackerCellValue(patient.pkg, col.key) : '')),
         '', // OP (blank – filled by hand)
         patient ? new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
@@ -147,7 +193,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         const hAlign = i === 0 ? 'center' : i <= 3 ? 'left' : 'center'
         styleCell(cell, FONT, hAlign)
       })
-      row.height = 16
+      row.height = 24
     }
 
     /* ── Column widths – snug fit for A4 Landscape ── */
@@ -259,7 +305,7 @@ export default function Tracker() {
                   </Link>
                 </td>
                 <td className="px-3 py-3 text-gray-600 font-mono text-xs">{p.uhid}</td>
-                <td className="px-3 py-3 text-gray-700 whitespace-nowrap">{p.package_name || '—'}</td>
+                <td className="px-3 py-3 text-gray-700 max-w-[120px] whitespace-pre-line leading-tight">{wrapPackageName(p.package_name || '—')}</td>
                 {TRACKER_COLS.map((col) => (
                   <td key={col.key} className="px-2 py-3 text-center text-gray-700">
                     {getTrackerCellValue(p.pkg, col.key)}

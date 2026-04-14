@@ -8,12 +8,13 @@ import type { TaskGroup, PatientTask } from '@/types'
 import { getTaskGroupStatuses, isPatientComplete, getAvailableTasks } from '@/lib/taskEngine'
 
 const GROUP_LABELS: Record<TaskGroup, string> = {
+  BILLING: 'Billing',
+  CHECK_IN: 'Check In',
   NURSING: 'Nursing',
   LAB: 'Laboratory',
   IMAGING: 'Imaging',
   CARDIAC: 'Cardiac',
   CONSULT: 'Consultation',
-  OTHER: 'Other',
 }
 
 const PKG_COLORS: Record<string, { border: string; bg: string; badge: string; text: string }> = {
@@ -35,21 +36,23 @@ function TaskIcon({ status }: { status: PatientTask['status'] }) {
   return <Circle className="w-5 h-5 text-gray-400" />
 }
 
-function useElapsedTimer(checkedInAt: string | null) {
+function useElapsedTimer(checkedInAt: string | null, completedAt: string | null) {
   const [elapsed, setElapsed] = useState('')
   useEffect(() => {
     if (!checkedInAt) return
     function update() {
-      const diff = Math.max(0, Math.floor((Date.now() - new Date(checkedInAt!).getTime()) / 1000))
+      const endTime = completedAt ? new Date(completedAt).getTime() : Date.now()
+      const diff = Math.max(0, Math.floor((endTime - new Date(checkedInAt!).getTime()) / 1000))
       const h = Math.floor(diff / 3600)
       const m = Math.floor((diff % 3600) / 60)
       const s = diff % 60
       setElapsed(h > 0 ? `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s` : `${m}m ${String(s).padStart(2, '0')}s`)
     }
     update()
+    if (completedAt) return // Don't tick if already complete
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
-  }, [checkedInAt])
+  }, [checkedInAt, completedAt])
   return elapsed
 }
 
@@ -58,7 +61,18 @@ export default function PatientDetail() {
   const navigate = useNavigate()
   const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, state, updatePatientPackage } = useApp()
   const patient = getPatientById(id!)
-  const elapsed = useElapsedTimer(patient?.checked_in_at ?? null)
+
+  // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
+  const lastCompletedAt = useMemo(() => {
+    if (!patient) return null
+    const tasks = patient.tasks
+    const allDone = tasks.filter((t) => t.is_mandatory).every((t) => t.status === 'COMPLETED')
+    if (!allDone) return null
+    const completedTimes = tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
+    return completedTimes.length > 0 ? new Date(Math.max(...completedTimes)).toISOString() : null
+  }, [patient])
+
+  const elapsed = useElapsedTimer(patient?.checked_in_at ?? null, lastCompletedAt)
   const [billingTaskId, setBillingTaskId] = useState<string | null>(null)
   const [billingPkgSearch, setBillingPkgSearch] = useState('')
   const [editingCheckIn, setEditingCheckIn] = useState(false)
@@ -171,11 +185,11 @@ export default function PatientDetail() {
                 </>
               )}
               <span className="text-gray-300">|</span>
-              <Timer className="w-3.5 h-3.5 text-primary-500" />
-              <span className="text-xs font-mono font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full">
+              <Timer className={`w-3.5 h-3.5 ${allComplete ? 'text-green-500' : 'text-primary-500'}`} />
+              <span className={`text-xs font-mono font-medium px-2 py-0.5 rounded-full ${allComplete ? 'text-green-700 bg-green-50' : 'text-primary-700 bg-primary-50'}`}>
                 {elapsed || '0m 00s'}
               </span>
-              <span className="text-xs text-gray-400">elapsed</span>
+              <span className="text-xs text-gray-400">{allComplete ? 'total time' : 'elapsed'}</span>
               <button
                 onClick={() => undoCheckIn(patient.id)}
                 className="inline-flex items-center gap-1 ml-2 px-2.5 py-1 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"

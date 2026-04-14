@@ -19,12 +19,13 @@ import type { TaskGroup } from '@/types'
 import { isPatientComplete, getTaskGroupStatuses, getAvailableTasks } from '@/lib/taskEngine'
 
 const GROUP_LABELS: Record<TaskGroup, string> = {
+  BILLING: 'Billing',
+  CHECK_IN: 'Check In',
   NURSING: 'Nursing',
   LAB: 'Lab',
   IMAGING: 'Imaging',
   CARDIAC: 'Cardiac',
   CONSULT: 'Consult',
-  OTHER: 'Other',
 }
 
 const PACKAGE_COLORS: Record<string, { border: string; bg: string; badge: string }> = {

@@ -35,11 +35,13 @@ export function KPICard({
   value,
   subtitle,
   color = 'primary',
+  onClick,
 }: {
   title: string
   value: string | number
   subtitle?: string
   color?: 'primary' | 'green' | 'yellow' | 'red' | 'gray'
+  onClick?: () => void
 }) {
   const colors = {
     primary: 'border-l-primary-500 bg-primary-50/50',
@@ -50,7 +52,10 @@ export function KPICard({
   }
 
   return (
-    <div className={clsx('rounded-lg border border-gray-200 border-l-4 p-4', colors[color])}>
+    <div
+      className={clsx('rounded-lg border border-gray-200 border-l-4 p-4', colors[color], onClick && 'cursor-pointer select-none')}
+      onClick={onClick}
+    >
       <p className="text-sm text-gray-500 font-medium">{title}</p>
       <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
       {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
