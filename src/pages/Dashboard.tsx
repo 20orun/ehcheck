@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<string>('priority')
   const [tatInHours, setTatInHours] = useState(false)
+  const [waitInHours, setWaitInHours] = useState(false)
 
   // Derive unique package names for filter tabs
   const packageNames = Array.from(new Set(patients.map((p) => p.package_name).filter(Boolean))) as string[]
@@ -203,9 +204,13 @@ export default function Dashboard() {
                 <th className="text-left px-4 py-3 font-medium text-gray-500">UHID</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Task Groups</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Active Tasks</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
+                <th
+                  className="text-left px-4 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700"
+                  onClick={() => setWaitInHours((v) => !v)}
+                  title="Click to toggle min/hr"
+                >
                   <Clock className="w-4 h-4 inline mr-1" />
-                  Wait
+                  Wait ({waitInHours ? 'hr' : 'min'})
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Priority</th>
               </tr>
@@ -260,7 +265,7 @@ export default function Dashboard() {
                             : 'text-gray-600'
                       }`}
                     >
-                      {p.waitingMinutes} min
+                      {waitInHours ? `${(p.waitingMinutes / 60).toFixed(1)} hr` : `${p.waitingMinutes} min`}
                     </span>
                   </td>
                   <td className="px-4 py-3">
