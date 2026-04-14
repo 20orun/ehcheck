@@ -39,6 +39,10 @@ import {
   deletePatientDb,
   cancelTaskDb,
   updatePatientPackageDb,
+  insertPackageDb,
+  updatePackageDb,
+  insertPackageStepsDb,
+  deletePackageStepsDb,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -63,6 +67,8 @@ type Action =
   | { type: 'DELETE_PATIENT'; payload: { patientId: string } }
   | { type: 'CANCEL_TASK'; payload: { taskId: string } }
   | { type: 'UPDATE_PATIENT_PACKAGE'; payload: { patientId: string; packageId: string; tasks: PatientTask[] } }
+  | { type: 'ADD_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
+  | { type: 'UPDATE_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
   | { type: 'UPDATE_ALERT_CONFIG'; payload: Partial<AlertConfig> }
   | { type: 'SET_ALL_DATA'; payload: { patients: Patient[]; patientTasks: PatientTask[]; departments: Department[]; packages: Package[]; packageSteps: PackageStep[] } }
 
@@ -169,6 +175,23 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'UPDATE_ALERT_CONFIG':
       return { ...state, alertConfig: { ...state.alertConfig, ...action.payload } }
+    case 'ADD_PACKAGE':
+      return {
+        ...state,
+        packages: [...state.packages, action.payload.pkg],
+        packageSteps: [...state.packageSteps, ...action.payload.steps],
+      }
+    case 'UPDATE_PACKAGE':
+      return {
+        ...state,
+        packages: state.packages.map((p) =>
+          p.id === action.payload.pkg.id ? action.payload.pkg : p
+        ),
+        packageSteps: [
+          ...state.packageSteps.filter((s) => s.package_id !== action.payload.pkg.id),
+          ...action.payload.steps,
+        ],
+      }
     case 'SET_ALL_DATA':
       return {
         ...state,
@@ -209,7 +232,10 @@ interface AppContextType {
   setPriority: (patientId: string, priority: Priority) => void
   checkInPatient: (patientId: string) => void
   undoCheckIn: (patientId: string) => void
+  updateCheckInTime: (patientId: string, timestamp: string) => void
   advancePatient: (patientId: string) => void
+  createPackage: (pkg: Package, steps: PackageStep[]) => void
+  updatePackage: (pkg: Package, steps: PackageStep[]) => void
   resetData: () => Promise<void>
   // Legacy aliases
   getPatientsWithSteps: () => PatientWithTasks[]
@@ -654,6 +680,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  const updateCheckInTime = useCallback((patientId: string, timestamp: string) => {
+    dispatch({ type: 'CHECK_IN', payload: { patientId, timestamp } })
+    checkInPatientDb(patientId, timestamp).catch((err) =>
+      console.warn('Failed to persist check-in time update:', err)
+    )
+  }, [])
+
   const cancelTask = useCallback((taskId: string) => {
     dispatch({ type: 'CANCEL_TASK', payload: { taskId } })
     cancelTaskDb(taskId).catch((err) =>
@@ -719,6 +752,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dbUpdatePatientPriority(patientId, priority).catch((err) =>
       console.warn('Failed to persist priority change:', err)
     )
+  }, [])
+
+  const createPackage = useCallback((pkg: Package, steps: PackageStep[]) => {
+    dispatch({ type: 'ADD_PACKAGE', payload: { pkg, steps } })
+    insertPackageDb(pkg)
+      .then(() => insertPackageStepsDb(steps))
+      .catch((err) => console.warn('Failed to persist new package:', err))
+  }, [])
+
+  const updatePackage = useCallback((pkg: Package, steps: PackageStep[]) => {
+    dispatch({ type: 'UPDATE_PACKAGE', payload: { pkg, steps } })
+    updatePackageDb(pkg)
+      .then(() => deletePackageStepsDb(pkg.id))
+      .then(() => insertPackageStepsDb(steps))
+      .catch((err) => console.warn('Failed to persist package update:', err))
   }, [])
 
   // resetData: reset all tasks and check-ins in DB, then reload
@@ -787,7 +835,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPriority,
         checkInPatient,
         undoCheckIn,
+        updateCheckInTime,
         advancePatient,
+        createPackage,
+        updatePackage,
         resetData,
         // Legacy aliases
         getPatientsWithSteps: getPatientsWithTasks,

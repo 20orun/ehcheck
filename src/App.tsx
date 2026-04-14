@@ -9,6 +9,7 @@ import CoordinatorPanel from '@/pages/CoordinatorPanel'
 import Analytics from '@/pages/Analytics'
 import RegisterPatient from '@/pages/RegisterPatient'
 import Tracker from '@/pages/Tracker'
+import Packages from '@/pages/Packages'
 import Auth from '@/pages/Auth'
 
 function AppRoutes() {
@@ -41,6 +42,7 @@ function AppRoutes() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/register" element={<RegisterPatient />} />
           <Route path="/tracker" element={<Tracker />} />
+          <Route path="/packages" element={<Packages />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

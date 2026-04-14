@@ -19,10 +19,10 @@ export async function fetchDepartments(): Promise<Department[]> {
 export async function fetchPackages(): Promise<Package[]> {
   const { data, error } = await supabase
     .from('packages')
-    .select('id, name, tracker_blood_sample, tracker_usg, tracker_breakfast, tracker_ppbs, tracker_xray, tracker_mammography, tracker_bmd, tracker_ecg, tracker_echo, tracker_tmt, tracker_pft, tracker_lunch, tracker_consultation, tracker_dental')
+    .select('*')
     .order('name')
   if (error) throw error
-  return (data ?? []) as Package[]
+  return (data ?? []).map((d) => ({ ...d, price: d.price ?? null })) as Package[]
 }
 
 export async function fetchPackageSteps(): Promise<PackageStep[]> {
@@ -261,4 +261,72 @@ export async function resetAllData(): Promise<DbData> {
 
   // Re-fetch everything
   return loadAllData()
+}
+
+// ─── Package CRUD ────────────────────────────────────
+
+export async function insertPackageDb(pkg: Package): Promise<void> {
+  const { error } = await supabase.from('packages').insert({
+    id: pkg.id,
+    name: pkg.name,
+    price: pkg.price,
+    tracker_blood_sample: pkg.tracker_blood_sample,
+    tracker_usg: pkg.tracker_usg,
+    tracker_breakfast: pkg.tracker_breakfast,
+    tracker_ppbs: pkg.tracker_ppbs,
+    tracker_xray: pkg.tracker_xray,
+    tracker_mammography: pkg.tracker_mammography,
+    tracker_bmd: pkg.tracker_bmd,
+    tracker_ecg: pkg.tracker_ecg,
+    tracker_echo: pkg.tracker_echo,
+    tracker_tmt: pkg.tracker_tmt,
+    tracker_pft: pkg.tracker_pft,
+    tracker_lunch: pkg.tracker_lunch,
+    tracker_consultation: pkg.tracker_consultation,
+    tracker_dental: pkg.tracker_dental,
+  })
+  if (error) throw error
+}
+
+export async function updatePackageDb(pkg: Package): Promise<void> {
+  const { error } = await supabase.from('packages').update({
+    name: pkg.name,
+    price: pkg.price,
+    tracker_blood_sample: pkg.tracker_blood_sample,
+    tracker_usg: pkg.tracker_usg,
+    tracker_breakfast: pkg.tracker_breakfast,
+    tracker_ppbs: pkg.tracker_ppbs,
+    tracker_xray: pkg.tracker_xray,
+    tracker_mammography: pkg.tracker_mammography,
+    tracker_bmd: pkg.tracker_bmd,
+    tracker_ecg: pkg.tracker_ecg,
+    tracker_echo: pkg.tracker_echo,
+    tracker_tmt: pkg.tracker_tmt,
+    tracker_pft: pkg.tracker_pft,
+    tracker_lunch: pkg.tracker_lunch,
+    tracker_consultation: pkg.tracker_consultation,
+    tracker_dental: pkg.tracker_dental,
+  }).eq('id', pkg.id)
+  if (error) throw error
+}
+
+export async function insertPackageStepsDb(steps: PackageStep[]): Promise<void> {
+  if (steps.length === 0) return
+  const { error } = await supabase.from('package_steps').insert(
+    steps.map((s) => ({
+      id: s.id,
+      package_id: s.package_id,
+      step_name: s.step_name,
+      department_id: s.department_id,
+      step_order: s.step_order,
+      task_group: s.task_group,
+      is_mandatory: s.is_mandatory,
+    }))
+  )
+  if (error) throw error
+}
+
+export async function deletePackageStepsDb(packageId: string): Promise<void> {
+  const { error } = await supabase.from('package_steps').delete().eq('package_id', packageId)
+  if (error) throw error
 }

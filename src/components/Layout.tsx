@@ -11,6 +11,7 @@ import {
   X,
   RotateCcw,
   ClipboardList,
+  Package as PackageIcon,
   ChevronsLeft,
   ChevronsRight,
   LogOut,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/tracker', icon: ClipboardList, label: 'Tracker' },
   { to: '/register', icon: UserPlus, label: 'Register' },
+  { to: '/packages', icon: PackageIcon, label: 'Packages' },
 ]
 
 export default function Layout() {
@@ -207,5 +209,6 @@ function getPageTitle(path: string): string {
   if (path === '/analytics') return 'Analytics & Reports'
   if (path === '/register') return 'Billing'
   if (path === '/tracker') return 'Patient Tracker'
+  if (path === '/packages') return 'Packages'
   return 'ExecuFlow'
 }

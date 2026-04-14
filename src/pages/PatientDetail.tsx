@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
 import type { TaskGroup, PatientTask } from '@/types'
@@ -56,11 +56,13 @@ function useElapsedTimer(checkedInAt: string | null) {
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, state, updatePatientPackage } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, state, updatePatientPackage } = useApp()
   const patient = getPatientById(id!)
   const elapsed = useElapsedTimer(patient?.checked_in_at ?? null)
   const [billingTaskId, setBillingTaskId] = useState<string | null>(null)
   const [billingPkgSearch, setBillingPkgSearch] = useState('')
+  const [editingCheckIn, setEditingCheckIn] = useState(false)
+  const [checkInTimeInput, setCheckInTimeInput] = useState('')
 
   const filteredBillingPackages = useMemo(() => {
     if (!billingPkgSearch.trim()) return state.packages
@@ -113,12 +115,61 @@ export default function PatientDetail() {
           {patient.checked_in_at ? (
             <div className="flex items-center gap-1.5 mt-1">
               <LogIn className="w-3.5 h-3.5 text-primary-500" />
-              <span className="text-xs text-gray-500">
-                Checked in at{' '}
-                <span className="font-medium text-gray-700">
-                  {new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                </span>
-              </span>
+              {editingCheckIn ? (
+                <>
+                  <input
+                    type="time"
+                    value={checkInTimeInput}
+                    onChange={(e) => setCheckInTimeInput(e.target.value)}
+                    className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      if (checkInTimeInput) {
+                        const original = new Date(patient.checked_in_at!)
+                        const [h, m] = checkInTimeInput.split(':').map(Number)
+                        original.setHours(h, m, 0, 0)
+                        updateCheckInTime(patient.id, original.toISOString())
+                      }
+                      setEditingCheckIn(false)
+                    }}
+                    className="inline-flex items-center p-0.5 text-green-600 hover:text-green-800 transition-colors"
+                    title="Save"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditingCheckIn(false)}
+                    className="inline-flex items-center p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Cancel"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs text-gray-500">
+                    Checked in at{' '}
+                    <span className="font-medium text-gray-700">
+                      {new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      const d = new Date(patient.checked_in_at!)
+                      setCheckInTimeInput(
+                        `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                      )
+                      setEditingCheckIn(true)
+                    }}
+                    className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"
+                    title="Edit check-in time"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                </>
+              )}
               <span className="text-gray-300">|</span>
               <Timer className="w-3.5 h-3.5 text-primary-500" />
               <span className="text-xs font-mono font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full">

@@ -83,6 +83,12 @@ export default function RegisterPatient() {
   const [importResult, setImportResult] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Paste bulk import state
+  const [pasteText, setPasteText] = useState('')
+  const [pasteRows, setPasteRows] = useState<CsvRow[]>([])
+  const [pasteErrors, setPasteErrors] = useState<string[]>([])
+  const [pasteResult, setPasteResult] = useState<string | null>(null)
+
   const packageNameMap = new Map(
     state.packages.map((p) => [p.name.toLowerCase(), p.id]),
   )
@@ -136,6 +142,50 @@ export default function RegisterPatient() {
     setCsvErrors([])
     setImportResult(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function handlePasteChange(text: string) {
+    setPasteText(text)
+    setPasteResult(null)
+    if (!text.trim()) {
+      setPasteRows([])
+      setPasteErrors([])
+      return
+    }
+    const lines = text.split(/\r?\n/).filter((l) => l.trim())
+    const rows: CsvRow[] = []
+    const errors: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const cols = lines[i].split('\t').map((c) => c.trim())
+      const rowName = cols[0] || ''
+      const rowUhid = cols[1] || ''
+      if (!rowName || !rowUhid) {
+        errors.push(`Row ${i + 1}: both name and UHID are required.`)
+        continue
+      }
+      rows.push({ name: rowName, uhid: rowUhid, package: '', priority: 'NORMAL' })
+    }
+    setPasteRows(rows)
+    setPasteErrors(errors)
+  }
+
+  function handlePasteImport() {
+    let count = 0
+    for (const row of pasteRows) {
+      registerPatient(row.name, row.uhid, null, row.priority)
+      count++
+    }
+    setPasteResult(`Successfully registered ${count} patient${count !== 1 ? 's' : ''}.`)
+    setPasteText('')
+    setPasteRows([])
+    setPasteErrors([])
+  }
+
+  function clearPaste() {
+    setPasteText('')
+    setPasteRows([])
+    setPasteErrors([])
+    setPasteResult(null)
   }
 
   return (
@@ -323,6 +373,85 @@ export default function RegisterPatient() {
               <button
                 type="button"
                 onClick={clearCsv}
+                className="px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Paste from Excel */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-800">Paste from Excel</h3>
+        <p className="text-xs text-gray-500">
+          Copy rows from Excel (columns: <strong>Name</strong>, <strong>UHID</strong> — no header) and paste below.
+        </p>
+
+        <textarea
+          value={pasteText}
+          onChange={(e) => handlePasteChange(e.target.value)}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pasted = e.clipboardData.getData('text/plain')
+            handlePasteChange(pasted)
+          }}
+          rows={5}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          placeholder={"John Doe\t12345\nJane Smith\t67890"}
+        />
+
+        {pasteErrors.length > 0 && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 space-y-1">
+            {pasteErrors.map((err, i) => (
+              <p key={i} className="text-xs text-red-700">{err}</p>
+            ))}
+          </div>
+        )}
+
+        {pasteResult && (
+          <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+            <p className="text-xs text-green-700 font-medium">{pasteResult}</p>
+          </div>
+        )}
+
+        {pasteRows.length > 0 && (
+          <>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="max-h-60 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">#</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Name</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">UHID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pasteRows.map((row, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-3 py-1.5 text-gray-400">{i + 1}</td>
+                        <td className="px-3 py-1.5">{row.name}</td>
+                        <td className="px-3 py-1.5 font-mono">{row.uhid}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handlePasteImport}
+                className="flex-1 bg-primary-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+              >
+                Import {pasteRows.length} Patient{pasteRows.length !== 1 ? 's' : ''}
+              </button>
+              <button
+                type="button"
+                onClick={clearPaste}
                 className="px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Cancel

@@ -18,6 +18,7 @@ export interface Department {
 export interface Package {
   id: string
   name: string
+  price: number | null
   tracker_blood_sample: string
   tracker_usg: string
   tracker_breakfast: string
