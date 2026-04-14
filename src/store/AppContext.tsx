@@ -254,6 +254,9 @@ interface AppContextType {
   createPackage: (pkg: Package, steps: PackageStep[]) => void
   updatePackage: (pkg: Package, steps: PackageStep[]) => void
   resetData: () => Promise<void>
+  holidays: Set<string>
+  toggleHoliday: (date: string) => void
+  isHoliday: (date: string) => boolean
   // Legacy aliases
   getPatientsWithSteps: () => PatientWithTasks[]
   startStep: (taskId: string) => void
@@ -284,6 +287,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   const [selectedDate, setSelectedDateRaw] = useState(getTodayStr)
   const [clinicDates, setClinicDates] = useState<string[]>([])
+  const [holidays, setHolidays] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('hcheck_holidays')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
   const isViewingPastDate = selectedDate !== getTodayStr()
 
   // Load data from Supabase on mount & when selectedDate changes
@@ -314,6 +323,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSelectedDate = useCallback((date: string) => {
     setSelectedDateRaw(date)
   }, [])
+
+  const toggleHoliday = useCallback((date: string) => {
+    setHolidays((prev) => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      localStorage.setItem('hcheck_holidays', JSON.stringify([...next]))
+      return next
+    })
+  }, [])
+
+  const isHoliday = useCallback((date: string) => {
+    if (holidays.has(date)) return true
+    const d = new Date(date + 'T00:00:00')
+    return d.getDay() === 0 // Sunday
+  }, [holidays])
 
   /** Guard: block mutations when viewing a past date */
   const getTodayStrNow = () => {
@@ -922,6 +947,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createPackage,
         updatePackage,
         resetData,
+        holidays,
+        toggleHoliday,
+        isHoliday,
         // Legacy aliases
         getPatientsWithSteps: getPatientsWithTasks,
         startStep: startTask,

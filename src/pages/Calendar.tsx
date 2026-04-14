@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function CalendarPage() {
-  const { selectedDate, setSelectedDate, clinicDates } = useApp()
+  const { selectedDate, setSelectedDate, clinicDates, holidays, toggleHoliday, isHoliday } = useApp()
   const navigate = useNavigate()
 
   // Parse selectedDate to get initial month view
@@ -42,10 +42,18 @@ export default function CalendarPage() {
 
   const selectDay = (day: number) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    // Don't allow selecting future dates
-    if (dateStr > todayStr) return
     setSelectedDate(dateStr)
     navigate('/')
+  }
+
+  const handleToggleHoliday = (e: React.MouseEvent, day: number) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Sundays are always holidays, don't toggle
+    const d = new Date(dateStr + 'T00:00:00')
+    if (d.getDay() === 0) return
+    toggleHoliday(dateStr)
   }
 
   const goToToday = () => {
@@ -108,18 +116,20 @@ export default function CalendarPage() {
           const isToday = dateStr === todayStr
           const isSelected = dateStr === selectedDate
           const hasData = datesWithData.has(dateStr)
-          const isFuture = dateStr > todayStr
+          const holiday = isHoliday(dateStr)
+          const isSunday = new Date(dateStr + 'T00:00:00').getDay() === 0
 
           return (
             <button
               key={day}
               onClick={() => selectDay(day)}
-              disabled={isFuture}
+              onContextMenu={(e) => handleToggleHoliday(e, day)}
+              title={holiday ? (isSunday ? 'Sunday (Holiday)' : 'Holiday (right-click to remove)') : 'Right-click to mark as holiday'}
               className={clsx(
                 'h-12 rounded-lg text-sm font-medium transition-all relative flex flex-col items-center justify-center',
-                isFuture && 'text-gray-300 cursor-not-allowed',
-                !isFuture && !isSelected && !isToday && 'text-gray-700 hover:bg-gray-100',
-                !isFuture && !isSelected && isToday && 'ring-2 ring-primary-400 text-primary-700 bg-primary-50 hover:bg-primary-100',
+                !isSelected && !isToday && !holiday && 'text-gray-700 hover:bg-gray-100',
+                !isSelected && !isToday && holiday && 'text-red-400 bg-red-50 hover:bg-red-100',
+                !isSelected && isToday && 'ring-2 ring-primary-400 text-primary-700 bg-primary-50 hover:bg-primary-100',
                 isSelected && 'bg-primary-600 text-white shadow-md',
               )}
             >
@@ -133,13 +143,16 @@ export default function CalendarPage() {
               {hasData && isSelected && (
                 <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-white" />
               )}
+              {holiday && !isSelected && (
+                <span className="absolute top-0.5 right-0.5 text-[8px] text-red-400">H</span>
+              )}
             </button>
           )
         })}
       </div>
 
       {/* Legend */}
-      <div className="mt-6 flex items-center gap-4 text-xs text-gray-500">
+      <div className="mt-6 flex items-center gap-4 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-green-500" /> Has patient data
         </span>
@@ -149,7 +162,12 @@ export default function CalendarPage() {
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded bg-primary-600" /> Selected
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded bg-red-50 border border-red-200 text-[7px] text-red-400 flex items-center justify-center">H</span> Holiday
+        </span>
       </div>
+
+      <p className="mt-2 text-[10px] text-gray-400">Right-click a date to toggle holiday. Sundays are always holidays.</p>
 
       {/* Quick date list of recent dates with data */}
       {clinicDates.length > 0 && (

@@ -199,7 +199,7 @@ export default function Layout() {
           <div className="bg-amber-50 border-b border-amber-200 px-4 lg:px-6 py-2 flex items-center gap-2 text-sm text-amber-800">
             <CalendarDays className="w-4 h-4 shrink-0" />
             <span>
-              Viewing data from <strong>{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</strong> — read-only
+              Viewing data for <strong>{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</strong>
             </span>
             <button
               onClick={() => {

@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs'
 import { useApp } from '@/store/AppContext'
 import { Link } from 'react-router-dom'
 import { EmptyState } from '@/components/ui'
-import type { Package } from '@/types'
+import type { Package, PatientTask } from '@/types'
 
 const TRACKER_COLS = [
   { key: 'bloodSample', label: 'BLOOD\nSAMPLE' },
@@ -45,7 +45,22 @@ function getTrackerCellValue(pkg: Package | undefined, key: string): string {
   return (pkg[field] as string) || ''
 }
 
-type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; priority: import('@/types').Priority; created_at: string }
+type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; priority: import('@/types').Priority; created_at: string; outTime?: string }
+
+/** Return HH:MM of the last completed task for a patient, only if ALL tasks are completed */
+function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
+  const tasks = patientTasks.filter((t) => t.patient_id === patientId && !t.skipped)
+  if (tasks.length === 0) return ''
+  if (tasks.some((t) => t.status !== 'COMPLETED')) return ''
+  let latest: Date | null = null
+  for (const t of tasks) {
+    if (t.completed_at) {
+      const d = new Date(t.completed_at)
+      if (!latest || d > latest) latest = d
+    }
+  }
+  return latest ? latest.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
+}
 
 const ROWS_PER_SHEET = 20
 // 22 columns: A=SL.NO, B=NAME, C=UHID, D=PACKAGE, E–R=14 tracker cols, S=OP, T=IN, U=OUT
@@ -184,7 +199,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         ...TRACKER_COLS.map((col) => (patient ? getTrackerCellValue(patient.pkg, col.key) : '')),
         '', // OP (blank – filled by hand)
         patient ? new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
-        '', // OUT
+        patient?.outTime ?? '', // OUT
       ]
 
       vals.forEach((v, i) => {
@@ -249,6 +264,7 @@ export default function Tracker() {
         ...p,
         pkg,
         package_name: pkg?.name,
+        outTime: getOutTime(p.id, state.patientTasks),
       }
     })
 
@@ -315,7 +331,9 @@ export default function Tracker() {
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                   {new Date(p.checked_in_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </td>
-                <td className="px-3 py-3" />
+                <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                  {p.outTime}
+                </td>
               </tr>
             ))}
           </tbody>
