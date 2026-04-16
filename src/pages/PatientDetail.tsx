@@ -4,7 +4,7 @@ import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
 import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
-import type { TaskGroup, PatientTask, DoctorCode } from '@/types'
+import type { TaskGroup, PatientTask } from '@/types'
 import { getTaskGroupStatuses, isPatientComplete, getAvailableTasks } from '@/lib/taskEngine'
 import { DOCTORS } from '@/types'
 

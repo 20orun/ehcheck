@@ -5,19 +5,19 @@ import { EmptyState } from '@/components/ui'
 import type { Package, PatientTask, DoctorCode } from '@/types'
 
 const TRACKER_COLS = [
-  { key: 'bloodSample', label: 'BLOOD\nSAMPLE' },
+  { key: 'bloodSample', label: 'BLOOD' },
   { key: 'usg', label: 'USG' },
   { key: 'breakfast', label: 'BREAK\nFAST' },
   { key: 'ppbs', label: 'PPBS\nTIME' },
   { key: 'xray', label: 'X-RAY' },
-  { key: 'mammography', label: 'MAMMO\nGRAPHY/USG' },
+  { key: 'mammography', label: 'MAM\nMO' },
   { key: 'bmd', label: 'BMD' },
   { key: 'ecg', label: 'ECG' },
   { key: 'echo', label: 'ECHO' },
   { key: 'tmt', label: 'TMT' },
   { key: 'pft', label: 'PFT' },
-  { key: 'lunch', label: 'LUNCH' },
-  { key: 'consultation', label: 'CONSUL\nTATION' },
+  { key: 'lunch', label: 'LUN\nCH' },
+  { key: 'consultation', label: 'CON\nSULT' },
   { key: 'd', label: 'D' },
 ]
 
@@ -63,13 +63,13 @@ function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
 }
 
 const ROWS_PER_SHEET = 20
-// 23 columns: A=SL.NO, B=NAME, C=UHID, D=PACKAGE, E=DR, F–S=14 tracker cols, T=OP, U=IN, V=OUT
+// 22 columns: A=SL.NO, B=NAME, C=UHID, D=PACKAGE, E–R=14 tracker cols, S=OP, T=IN, U=OUT
 const COL_HEADERS = [
-  'SL.\nNO', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DR',
+  'SL.\nNO', 'PATIENT NAME', 'UHID', 'PACKAGE',
   ...TRACKER_COLS.map((c) => c.label.replace(/\n/g, '\n')),
   'OP', 'IN', 'OUT',
 ]
-const TOTAL_COLS = COL_HEADERS.length // 23 (A–W)
+const TOTAL_COLS = COL_HEADERS.length // 22 (A–V)
 
 const FONT: Partial<ExcelJS.Font> = { name: 'Segoe UI Black', size: 8 }
 const FONT_BOLD: Partial<ExcelJS.Font> = { ...FONT, bold: true }
@@ -158,14 +158,14 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
       },
     })
 
-    /* ── Row 1 : Title (A1:Q1 merged) + Date (R1:V1 merged) ── */
-    ws.mergeCells(1, 1, 1, 17)  // A1:Q1
+    /* ── Row 1 : Title (A1:P1 merged) + Date (Q1:U1 merged) ── */
+    ws.mergeCells(1, 1, 1, 16)  // A1:P1
     const titleCell = ws.getCell('A1')
     titleCell.value = 'EXECUTIVE HEALTH CHECKUP  TRACKER'
     styleCell(titleCell, { ...FONT, size: 13, bold: true }, 'center')
 
-    ws.mergeCells(1, 18, 1, 22) // R1:V1
-    const dateCell = ws.getRow(1).getCell(18)
+    ws.mergeCells(1, 17, 1, 21) // Q1:U1
+    const dateCell = ws.getRow(1).getCell(17)
     dateCell.value = dateStr
     styleCell(dateCell, { ...FONT, size: 10, bold: true }, 'center')
 
@@ -190,14 +190,18 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
       const row = ws.getRow(excelRowNum)
       const patient = checkedIn[startIdx + r]
 
-      // Build cell values: SL.NO, Name, UHID, Package, DR, 14 tracker cols, OP, IN, OUT
+      // Build cell values: SL.NO, Name, UHID, Package, 14 tracker cols, OP, IN, OUT
+      // The consultation column shows the assigned doctor initial instead of the package default
       const vals: (string | number)[] = [
         startIdx + r + 1,
         patient ? uppercaseName(patient.name) : '',
         patient?.uhid ?? '',
         wrapPackageName(patient?.package_name ?? ''),
-        patient?.assigned_doctor ?? '',
-        ...TRACKER_COLS.map((col) => (patient ? getTrackerCellValue(patient.pkg, col.key) : '')),
+        ...TRACKER_COLS.map((col) => {
+          if (!patient) return ''
+          if (col.key === 'consultation') return patient.assigned_doctor ?? ''
+          return getTrackerCellValue(patient.pkg, col.key)
+        }),
         '', // OP (blank – filled by hand)
         patient ? new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
         patient?.outTime ?? '', // OUT
@@ -206,7 +210,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
       vals.forEach((v, i) => {
         const cell = row.getCell(i + 1)
         cell.value = v
-        const hAlign = i === 0 ? 'center' : i <= 4 ? 'left' : 'center'
+        const hAlign = i === 0 ? 'center' : i <= 3 ? 'left' : 'center'
         styleCell(cell, FONT, hAlign)
       })
       row.height = 24
@@ -215,33 +219,32 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
     /* ── Column widths – snug fit for A4 Landscape ── */
     const colWidths = [
       3.5,  // A  SL.NO
-      20,   // B  PATIENT NAME
-      13,   // C  UHID
-      15,   // D  PACKAGE
-      3,    // E  DR
-      5.8,  // F  BLOOD SAMPLE
-      4,    // G  USG
-      4.5,  // H  BREAKFAST
-      4.5,  // I  PPBS TIME
-      4.2,  // J  X-RAY
-      5,    // K  MAMMOGRAPHY/USG
-      4,    // L  BMD
-      4,    // M  ECG
-      4.2,  // N  ECHO
-      4,    // O  TMT
-      3.8,  // P  PFT
-      4.5,  // Q  LUNCH
-      5,    // R  CONSULTATION
-      2.5,  // S  D
-      3.5,  // T  OP
-      4.5,  // U  IN
-      4.5,  // V  OUT
-      1,    // W  padding for date merge
+      22,   // B  PATIENT NAME
+      14,   // C  UHID
+      18,   // D  PACKAGE
+      6,    // E  BLOOD SAMPL
+      4.5,  // F  USG
+      5,    // G  BREAKFAST
+      5,    // H  PPBS TIME
+      5,    // I  X-RAY
+      4.5,  // J  MAM MO
+      4.5,  // K  BMD
+      4.5,  // L  ECG
+      5,    // M  ECHO
+      4.5,  // N  TMT
+      4,    // O  PFT
+      4.5,  // P  LUNCH
+      5,    // Q  CONSULT
+      2.5,  // R  D
+      4,    // S  OP
+      5,    // T  IN
+      5,    // U  OUT
+      1,    // V  padding for date merge
     ]
     colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
     /* ── Print area ── */
-    ws.pageSetup.printArea = `A1:V22`
+    ws.pageSetup.printArea = `A1:U22`
   }
 
   const buffer = await wb.xlsx.writeBuffer()
@@ -297,7 +300,6 @@ export default function Tracker() {
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Patient Name</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">UHID</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Package</th>
-              <th className="text-center px-2 py-3 font-semibold text-gray-700 whitespace-nowrap">DR</th>
               {TRACKER_COLS.map((col) => (
                 <th
                   key={col.key}
@@ -325,10 +327,9 @@ export default function Tracker() {
                 </td>
                 <td className="px-3 py-3 text-gray-600 font-mono text-xs">{p.uhid}</td>
                 <td className="px-3 py-3 text-gray-700 max-w-[120px] whitespace-pre-line leading-tight">{wrapPackageName(p.package_name || '—')}</td>
-                <td className="px-2 py-3 text-center font-bold text-primary-700">{p.assigned_doctor ?? ''}</td>
                 {TRACKER_COLS.map((col) => (
-                  <td key={col.key} className="px-2 py-3 text-center text-gray-700">
-                    {getTrackerCellValue(p.pkg, col.key)}
+                  <td key={col.key} className={`px-2 py-3 text-center ${col.key === 'consultation' ? 'font-bold text-primary-700' : 'text-gray-700'}`}>
+                    {col.key === 'consultation' ? (p.assigned_doctor ?? '') : getTrackerCellValue(p.pkg, col.key)}
                   </td>
                 ))}
                 <td className="px-3 py-3" />

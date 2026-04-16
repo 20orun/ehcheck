@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function CalendarPage() {
-  const { selectedDate, setSelectedDate, clinicDates, holidays, toggleHoliday, isHoliday } = useApp()
+  const { selectedDate, setSelectedDate, clinicDates, toggleHoliday, isHoliday } = useApp()
   const navigate = useNavigate()
 
   // Parse selectedDate to get initial month view
