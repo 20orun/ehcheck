@@ -23,22 +23,6 @@ const TRACKER_LABELS: { key: keyof Package; label: string }[] = [
 
 const TRACKER_VALUE_OPTIONS = ['', 'X', 'M', 'B', '-']
 
-// Auto-step generation mapping (mirrors seed-package-definitions.sql logic)
-const TRACKER_STEP_MAP: Record<string, { dept: string; stepName: string; group: TaskGroup }> = {
-  tracker_blood_sample: { dept: 'dept-lab', stepName: 'Blood Draw (FBS)', group: 'PHLEB' },
-  tracker_usg: { dept: 'dept-usg', stepName: 'USG Abdomen', group: 'USG' },
-  // Breakfast is always inserted here (unconditional – see generateStepsFromTrackers)
-  // PPBS is auto-included whenever blood sample is active (see generateStepsFromTrackers)
-  tracker_xray: { dept: 'dept-xray', stepName: 'Chest X-Ray', group: 'XRAY' },
-  tracker_mammography: { dept: 'dept-mammo', stepName: 'Mammogram / USG Breast', group: 'MAMMO' },
-  tracker_bmd: { dept: 'dept-bmd', stepName: 'BMD (Bone Density)', group: 'BMD' },
-  tracker_ecg: { dept: 'dept-ecg', stepName: 'ECG', group: 'ECG' },
-  tracker_echo: { dept: 'dept-echo', stepName: 'Echo', group: 'ECHO' },
-  tracker_tmt: { dept: 'dept-tmt', stepName: 'TMT', group: 'TMT' },
-  tracker_pft: { dept: 'dept-pulm', stepName: 'PFT', group: 'PFT' },
-  // Lunch is always inserted after PFT (unconditional – see generateStepsFromTrackers)
-}
-
 function generateStepsFromTrackers(packageId: string, trackers: Record<string, string>): PackageStep[] {
   const steps: PackageStep[] = []
   let order = 1

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useApp } from '@/store/AppContext'
 import { KPICard } from '@/components/ui'
 import {
@@ -19,6 +20,7 @@ import type { PieLabelRenderProps } from 'recharts'
 export default function Analytics() {
   const { getPatientsWithTasks, state } = useApp()
   const patients = getPatientsWithTasks()
+  const [tatInHours, setTatInHours] = useState(false)
 
   // ─── Avg TAT per package ─────────────────────────
   const packageTATs = state.packages.map((pkg) => {
@@ -82,10 +84,27 @@ export default function Analytics() {
   const completedPatients = patients.filter((p) => isPatientComplete(p.tasks)).length
   const completionRate = totalPatients > 0 ? Math.round((completedPatients / totalPatients) * 100) : 0
 
+  // ─── Total Avg TAT (all completed patients) ─────
+  const allCompleted = patients.filter((p) => isPatientComplete(p.tasks))
+  const totalAvgTATMin =
+    allCompleted.length > 0
+      ? allCompleted.reduce((sum, p) => {
+          const checkedIn = p.checked_in_at ? new Date(p.checked_in_at).getTime() : null
+          const endTimes = p.tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
+          if (checkedIn && endTimes.length) {
+            return sum + (Math.max(...endTimes) - checkedIn) / 60000
+          }
+          return sum
+        }, 0) / allCompleted.length
+      : 0
+  const totalAvgTATDisplay = tatInHours
+    ? `${(totalAvgTATMin / 60).toFixed(1)} hrs`
+    : `${Math.round(totalAvgTATMin)} min`
+
   return (
     <div className="space-y-6">
       {/* Summary KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KPICard title="Total Patients" value={totalPatients} color="primary" />
         <KPICard title="Completed" value={completedPatients} color="green" />
         <KPICard title="Completion Rate" value={`${completionRate}%`} color="green" />
@@ -93,6 +112,13 @@ export default function Analytics() {
           title="Active Tasks"
           value={state.patientTasks.filter((t) => t.status === 'IN_PROGRESS').length}
           color="primary"
+        />
+        <KPICard
+          title="Avg TAT (click to toggle)"
+          value={totalAvgTATDisplay}
+          subtitle={allCompleted.length > 0 ? `${allCompleted.length} completed` : 'No data'}
+          color="yellow"
+          onClick={() => setTatInHours((v) => !v)}
         />
       </div>
 
