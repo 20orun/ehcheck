@@ -4,12 +4,21 @@ import type { PatientTask, TaskStatus, TaskGroup, TaskScore, TaskGroupStatus, Pa
 // Maps department_id → TaskGroup for the routing engine
 const DEPT_TO_GROUP: Record<string, TaskGroup> = {
   'dept-reg': 'BILLING',
-  'dept-lab': 'LAB',
-  'dept-rad': 'IMAGING',
-  'dept-card': 'CARDIAC',
-  'dept-pulm': 'PULMONARY',
+  'dept-lab': 'PHLEB',
+  'dept-usg': 'USG',
+  'dept-breakfast': 'BREAKFAST',
+  'dept-ppbs': 'PPBS',
+  'dept-xray': 'XRAY',
+  'dept-mammo': 'MAMMO',
+  'dept-bmd': 'BMD',
+  'dept-ecg': 'ECG',
+  'dept-echo': 'ECHO',
+  'dept-tmt': 'TMT',
+  'dept-pulm': 'PFT',
+  'dept-lunch': 'LUNCH',
+  'dept-diet': 'DIET',
   'dept-phys': 'CONSULT',
-  'dept-rev': 'CONSULT',
+  'dept-rev': 'REVIEW',
 }
 
 export function getDeptTaskGroup(departmentId: string): TaskGroup {
@@ -21,11 +30,21 @@ const GROUP_PRIORITY_WEIGHT: Record<TaskGroup, number> = {
   BILLING: 0,
   CHECK_IN: 1,
   NURSING: 2,
-  LAB: 3,
-  IMAGING: 4,
-  CARDIAC: 4,
-  PULMONARY: 5,
+  PHLEB: 3,
+  USG: 3,
+  BREAKFAST: 3,
+  PPBS: 3,
+  XRAY: 4,
+  MAMMO: 4,
+  BMD: 4,
+  ECG: 4,
+  ECHO: 4,
+  TMT: 4,
+  PFT: 5,
+  LUNCH: 5,
+  DIET: 6,
   CONSULT: 8,
+  REVIEW: 9,
 }
 
 // ─── Status Transitions ─────────────────────────────
@@ -41,11 +60,11 @@ export function isValidTransition(from: TaskStatus, to: TaskStatus): boolean {
 }
 
 // ─── Prerequisite Check ─────────────────────────────
-// CONSULT tasks require ALL mandatory LAB + IMAGING + CARDIAC tasks COMPLETED
+// CONSULT tasks require ALL mandatory diagnostic tasks COMPLETED
 export function arePrerequisitesMet(task: PatientTask, allPatientTasks: PatientTask[]): boolean {
-  if (task.task_group !== 'CONSULT') return true
+  if (task.task_group !== 'CONSULT' && task.task_group !== 'REVIEW') return true
 
-  const prereqGroups: TaskGroup[] = ['LAB', 'IMAGING', 'CARDIAC', 'PULMONARY']
+  const prereqGroups: TaskGroup[] = ['PHLEB', 'USG', 'PPBS', 'XRAY', 'MAMMO', 'BMD', 'ECG', 'ECHO', 'TMT', 'PFT']
   const mandatoryPrereqs = allPatientTasks.filter(
     (t) => prereqGroups.includes(t.task_group) && t.is_mandatory
   )
@@ -196,7 +215,7 @@ export function deriveGroupStatus(tasks: PatientTask[]): TaskStatus {
 }
 
 export function getTaskGroupStatuses(tasks: PatientTask[]): TaskGroupStatus[] {
-  const groups: TaskGroup[] = ['BILLING', 'CHECK_IN', 'NURSING', 'LAB', 'IMAGING', 'CARDIAC', 'PULMONARY', 'CONSULT']
+  const groups: TaskGroup[] = ['BILLING', 'CHECK_IN', 'NURSING', 'PHLEB', 'USG', 'BREAKFAST', 'PPBS', 'XRAY', 'MAMMO', 'BMD', 'ECG', 'ECHO', 'TMT', 'PFT', 'LUNCH', 'DIET', 'CONSULT', 'REVIEW']
 
   return groups
     .map((group) => {

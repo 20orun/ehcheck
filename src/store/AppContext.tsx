@@ -42,6 +42,7 @@ import {
   cancelTaskDb,
   updateTaskTimesDb,
   updatePatientPackageDb,
+  updateAssignedDoctorDb,
   insertPackageDb,
   updatePackageDb,
   insertPackageStepsDb,
@@ -73,6 +74,7 @@ type Action =
   | { type: 'UPDATE_PATIENT_PACKAGE'; payload: { patientId: string; packageId: string; tasks: PatientTask[]; assignedDoctor?: DoctorCode } }
   | { type: 'ADD_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
   | { type: 'UPDATE_PACKAGE'; payload: { pkg: Package; steps: PackageStep[] } }
+  | { type: 'UPDATE_ASSIGNED_DOCTOR'; payload: { patientId: string; doctor: DoctorCode } }
   | { type: 'UPDATE_ALERT_CONFIG'; payload: Partial<AlertConfig> }
   | { type: 'SET_ALL_DATA'; payload: { patients: Patient[]; patientTasks: PatientTask[]; departments: Department[]; packages: Package[]; packageSteps: PackageStep[] } }
 
@@ -186,6 +188,13 @@ function reducer(state: AppState, action: Action): AppState {
         ],
       }
     }
+    case 'UPDATE_ASSIGNED_DOCTOR':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId ? { ...p, assigned_doctor: action.payload.doctor } : p
+        ),
+      }
     case 'UPDATE_ALERT_CONFIG':
       return { ...state, alertConfig: { ...state.alertConfig, ...action.payload } }
     case 'ADD_PACKAGE':
@@ -245,6 +254,7 @@ interface AppContextType {
   skipTask: (taskId: string) => void
   cancelTask: (taskId: string) => void
   updatePatientPackage: (patientId: string, packageId: string, assignedDoctor?: DoctorCode) => void
+  updateAssignedDoctor: (patientId: string, doctor: DoctorCode) => void
   deletePatient: (patientId: string) => void
   setPriority: (patientId: string, priority: Priority) => void
   checkInPatient: (patientId: string) => void
@@ -837,6 +847,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [state.packageSteps, state.patientTasks, selectedDate]
   )
 
+  const updateAssignedDoctor = useCallback(
+    (patientId: string, doctor: DoctorCode) => {
+      if (selectedDate !== getTodayStrNow()) return
+      dispatch({ type: 'UPDATE_ASSIGNED_DOCTOR', payload: { patientId, doctor } })
+      updateAssignedDoctorDb(patientId, doctor).catch((err) =>
+        console.warn('Failed to persist assigned doctor update:', err)
+      )
+    },
+    [selectedDate]
+  )
+
   const deletePatient = useCallback((patientId: string) => {
     if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'DELETE_PATIENT', payload: { patientId } })
@@ -938,6 +959,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         skipTask,
         cancelTask,
         updatePatientPackage,
+        updateAssignedDoctor,
         deletePatient,
         setPriority,
         checkInPatient,

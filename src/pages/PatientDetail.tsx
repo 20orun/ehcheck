@@ -12,11 +12,21 @@ const GROUP_LABELS: Record<TaskGroup, string> = {
   BILLING: 'Billing',
   CHECK_IN: 'Check In',
   NURSING: 'Nursing',
-  LAB: 'Laboratory',
-  IMAGING: 'Imaging',
-  CARDIAC: 'Cardiac',
-  PULMONARY: 'Pulmonary',
-  CONSULT: 'Consultation',
+  PHLEB: 'Phlebotomy',
+  USG: 'USG',
+  BREAKFAST: 'Breakfast',
+  PPBS: 'Phlebotomy',
+  XRAY: 'X-Ray',
+  MAMMO: 'Mammography',
+  BMD: 'BMD',
+  ECG: 'ECG',
+  ECHO: 'Echo',
+  TMT: 'TMT',
+  PFT: 'PFT',
+  LUNCH: 'Lunch',
+  DIET: 'Dietician',
+  CONSULT: 'Physician Consultation',
+  REVIEW: 'Final Review',
 }
 
 const PKG_COLORS: Record<string, { border: string; bg: string; badge: string; text: string }> = {
@@ -61,7 +71,7 @@ function useElapsedTimer(checkedInAt: string | null, completedAt: string | null)
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor } = useApp()
   const patient = getPatientById(id!)
 
   // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
@@ -83,6 +93,7 @@ export default function PatientDetail() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editStartTime, setEditStartTime] = useState('')
   const [editEndTime, setEditEndTime] = useState('')
+  const [editingDoctor, setEditingDoctor] = useState(false)
 
   const filteredBillingPackages = useMemo(() => {
     if (!billingPkgSearch.trim()) return state.packages
@@ -112,6 +123,27 @@ export default function PatientDetail() {
     return acc
   }, {})
 
+  // Sort groups: started groups by earliest started_at, then not-started groups by default step_order
+  // REVIEW is always pinned to the end regardless of start time
+  const sortedGroupEntries = Object.entries(tasksByGroup).sort(([aGroup, aTasks], [bGroup, bTasks]) => {
+    // REVIEW always last
+    if (aGroup === 'REVIEW') return 1
+    if (bGroup === 'REVIEW') return -1
+
+    const aStarted = aTasks.filter((t) => t.started_at).map((t) => new Date(t.started_at!).getTime())
+    const bStarted = bTasks.filter((t) => t.started_at).map((t) => new Date(t.started_at!).getTime())
+    const aEarliest = aStarted.length > 0 ? Math.min(...aStarted) : null
+    const bEarliest = bStarted.length > 0 ? Math.min(...bStarted) : null
+
+    // Both started: sort by earliest start time
+    if (aEarliest !== null && bEarliest !== null) return aEarliest - bEarliest
+    // Only one started: started group comes first
+    if (aEarliest !== null) return -1
+    if (bEarliest !== null) return 1
+    // Neither started: preserve default step_order
+    return Math.min(...aTasks.map((t) => t.step_order)) - Math.min(...bTasks.map((t) => t.step_order))
+  })
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       {/* Header */}
@@ -132,6 +164,52 @@ export default function PatientDetail() {
           <p className="text-sm text-gray-500 mt-0.5">
             UHID: {patient.uhid} &bull; {patient.package_name || <span className="italic text-gray-400">No package selected</span>}
           </p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-sm text-gray-500">Doctor:</span>
+            {editingDoctor ? (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {DOCTORS.map((doc) => (
+                  <button
+                    key={doc.code}
+                    onClick={() => {
+                      updateAssignedDoctor(patient.id, doc.code)
+                      setEditingDoctor(false)
+                    }}
+                    className={clsx(
+                      'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border transition-colors',
+                      patient.assigned_doctor === doc.code
+                        ? 'bg-primary-100 border-primary-400 text-primary-700'
+                        : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-primary-50 hover:border-primary-300'
+                    )}
+                  >
+                    <span className="font-bold">{doc.code}</span> {doc.name}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setEditingDoctor(false)}
+                  className="inline-flex items-center p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Cancel"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="text-sm font-medium text-gray-700">
+                  {patient.assigned_doctor
+                    ? DOCTORS.find((d) => d.code === patient.assigned_doctor)?.name ?? patient.assigned_doctor
+                    : <span className="italic text-gray-400">Not assigned</span>}
+                </span>
+                <button
+                  onClick={() => setEditingDoctor(true)}
+                  className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"
+                  title="Change doctor"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              </>
+            )}
+          </div>
           {patient.checked_in_at ? (
             <div className="flex items-center gap-1.5 mt-1">
               <LogIn className="w-3.5 h-3.5 text-primary-500" />
@@ -272,7 +350,7 @@ export default function PatientDetail() {
 
       {/* Tasks by Group */}
       <div className="space-y-4">
-        {Object.entries(tasksByGroup).map(([group, groupTasks]) => (
+        {sortedGroupEntries.map(([group, groupTasks]) => (
           <div key={group} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-700">
@@ -472,30 +550,31 @@ export default function PatientDetail() {
         ))}
       </div>
 
-      {/* Adjust Times button – redistributes step times between check-in and final consult */}
+      {/* Adjust Times button – redistributes step times between check-in and Final Review */}
       {(() => {
-        // Find the last CONSULT task that has completed_at
-        const consultTasks = tasks.filter((t) => t.task_group === 'CONSULT' && t.completed_at)
-        const lastConsult = consultTasks.length > 0 ? consultTasks[consultTasks.length - 1] : null
-        const canAdjust = patient.checked_in_at && lastConsult
+        // Find the REVIEW task that has completed_at
+        const reviewTasks = tasks.filter((t) => t.task_group === 'REVIEW' && t.completed_at)
+        const lastReview = reviewTasks.length > 0 ? reviewTasks[reviewTasks.length - 1] : null
+        const canAdjust = patient.checked_in_at && lastReview
         if (!canAdjust) return null
 
         return (
           <button
             onClick={() => {
               const checkinMs = new Date(patient.checked_in_at!).getTime()
-              const endMs = new Date(lastConsult!.completed_at!).getTime()
+              const endMs = new Date(lastReview!.completed_at!).getTime()
               const totalSpan = endMs - checkinMs
               if (totalSpan <= 0) return
 
-              // Collect completed tasks after CHECK_IN and up to (including) the final consult, in step_order
-              const targetTasks = tasks.filter(
-                (t) =>
-                  t.task_group !== 'CHECK_IN' &&
-                  t.started_at &&
-                  t.completed_at &&
-                  t.step_order <= lastConsult!.step_order
-              )
+              // Collect all completed tasks (except CHECK_IN) up to and including REVIEW, in step_order
+              const targetTasks = tasks
+                .filter(
+                  (t) =>
+                    t.task_group !== 'CHECK_IN' &&
+                    t.started_at &&
+                    t.completed_at
+                )
+                .sort((a, b) => a.step_order - b.step_order)
               if (targetTasks.length === 0) return
 
               // Compute each task's original duration (min 1 min = 60000ms)

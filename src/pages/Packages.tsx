@@ -17,7 +17,7 @@ const TRACKER_LABELS: { key: keyof Package; label: string }[] = [
   { key: 'tracker_tmt', label: 'TMT' },
   { key: 'tracker_pft', label: 'PFT' },
   { key: 'tracker_lunch', label: 'Lunch' },
-  { key: 'tracker_consultation', label: 'Consultation' },
+  { key: 'tracker_consultation', label: 'Physician Consultation' },
   { key: 'tracker_dental', label: 'Dental' },
 ]
 
@@ -25,69 +25,52 @@ const TRACKER_VALUE_OPTIONS = ['', 'X', 'M', 'B', '-']
 
 // Auto-step generation mapping (mirrors seed-package-definitions.sql logic)
 const TRACKER_STEP_MAP: Record<string, { dept: string; stepName: string; group: TaskGroup }> = {
-  tracker_blood_sample: { dept: 'dept-lab', stepName: 'Blood Sample Collection', group: 'LAB' },
-  tracker_usg: { dept: 'dept-rad', stepName: 'USG', group: 'IMAGING' },
-  tracker_xray: { dept: 'dept-rad', stepName: 'X-Ray', group: 'IMAGING' },
-  tracker_mammography: { dept: 'dept-rad', stepName: 'Mammography / USG Breast', group: 'IMAGING' },
-  tracker_bmd: { dept: 'dept-rad', stepName: 'BMD', group: 'IMAGING' },
-  tracker_ecg: { dept: 'dept-card', stepName: 'ECG', group: 'CARDIAC' },
-  tracker_echo: { dept: 'dept-card', stepName: 'Echo', group: 'CARDIAC' },
-  tracker_tmt: { dept: 'dept-card', stepName: 'TMT', group: 'CARDIAC' },
-  tracker_pft: { dept: 'dept-pulm', stepName: 'PFT', group: 'PULMONARY' },
+  tracker_blood_sample: { dept: 'dept-lab', stepName: 'Blood Draw (FBS)', group: 'PHLEB' },
+  tracker_usg: { dept: 'dept-usg', stepName: 'USG Abdomen', group: 'USG' },
+  // Breakfast is always inserted here (unconditional – see generateStepsFromTrackers)
+  // PPBS is auto-included whenever blood sample is active (see generateStepsFromTrackers)
+  tracker_xray: { dept: 'dept-xray', stepName: 'Chest X-Ray', group: 'XRAY' },
+  tracker_mammography: { dept: 'dept-mammo', stepName: 'Mammogram / USG Breast', group: 'MAMMO' },
+  tracker_bmd: { dept: 'dept-bmd', stepName: 'BMD (Bone Density)', group: 'BMD' },
+  tracker_ecg: { dept: 'dept-ecg', stepName: 'ECG', group: 'ECG' },
+  tracker_echo: { dept: 'dept-echo', stepName: 'Echo', group: 'ECHO' },
+  tracker_tmt: { dept: 'dept-tmt', stepName: 'TMT', group: 'TMT' },
+  tracker_pft: { dept: 'dept-pulm', stepName: 'PFT', group: 'PFT' },
+  // Lunch is always inserted after PFT (unconditional – see generateStepsFromTrackers)
 }
 
 function generateStepsFromTrackers(packageId: string, trackers: Record<string, string>): PackageStep[] {
   const steps: PackageStep[] = []
   let order = 1
 
-  // Billing always first
-  steps.push({
-    id: `ps-${crypto.randomUUID()}`,
-    package_id: packageId,
-    step_name: 'Billing',
-    department_id: 'dept-reg',
-    step_order: order++,
-    task_group: 'BILLING',
-    is_mandatory: true,
-  })
+  const always = (step_name: string, department_id: string, task_group: TaskGroup) => {
+    steps.push({ id: `ps-${crypto.randomUUID()}`, package_id: packageId, step_name, department_id, step_order: order++, task_group, is_mandatory: true })
+  }
 
-  // Medical Consultation
-  steps.push({
-    id: `ps-${crypto.randomUUID()}`,
-    package_id: packageId,
-    step_name: 'Medical Consultation',
-    department_id: 'dept-phys',
-    step_order: order++,
-    task_group: 'CONSULT',
-    is_mandatory: true,
-  })
-
-  // Conditional steps based on tracker values (X and empty = not included)
-  for (const [key, mapping] of Object.entries(TRACKER_STEP_MAP)) {
+  const conditional = (key: string, step_name: string, department_id: string, task_group: TaskGroup, is_mandatory_fn?: (v: string) => boolean) => {
     const val = trackers[key]
     if (val && val !== 'X') {
-      steps.push({
-        id: `ps-${crypto.randomUUID()}`,
-        package_id: packageId,
-        step_name: mapping.stepName,
-        department_id: mapping.dept,
-        step_order: order++,
-        task_group: mapping.group,
-        is_mandatory: val === 'M' || val === '-',
-      })
+      steps.push({ id: `ps-${crypto.randomUUID()}`, package_id: packageId, step_name, department_id, step_order: order++, task_group, is_mandatory: is_mandatory_fn ? is_mandatory_fn(val) : (val === 'M' || val === '-') })
     }
   }
 
-  // Final Review always last
-  steps.push({
-    id: `ps-${crypto.randomUUID()}`,
-    package_id: packageId,
-    step_name: 'Final Review & Report',
-    department_id: 'dept-rev',
-    step_order: order++,
-    task_group: 'CONSULT',
-    is_mandatory: true,
-  })
+  // Step order: Billing → Blood → USG → Breakfast → PPBS → X-Ray → Mammo → BMD → ECG → Echo → TMT → PFT → Lunch → Dietician → Physician Consultation → Final Review
+  always('Billing', 'dept-reg', 'BILLING')
+  conditional('tracker_blood_sample', 'Blood Draw (FBS)', 'dept-lab', 'PHLEB')
+  conditional('tracker_usg', 'USG Abdomen', 'dept-usg', 'USG')
+  always('Breakfast', 'dept-breakfast', 'BREAKFAST')
+  conditional('tracker_blood_sample', 'Blood Draw (PPBS)', 'dept-ppbs', 'PPBS')
+  conditional('tracker_xray', 'Chest X-Ray', 'dept-xray', 'XRAY')
+  conditional('tracker_mammography', 'Mammogram / USG Breast', 'dept-mammo', 'MAMMO', (v) => v !== 'M')
+  conditional('tracker_bmd', 'BMD (Bone Density)', 'dept-bmd', 'BMD')
+  conditional('tracker_ecg', 'ECG', 'dept-ecg', 'ECG')
+  conditional('tracker_echo', 'Echocardiography', 'dept-echo', 'ECHO')
+  conditional('tracker_tmt', 'TMT', 'dept-tmt', 'TMT')
+  conditional('tracker_pft', 'PFT', 'dept-pulm', 'PFT')
+  always('Lunch', 'dept-lunch', 'LUNCH')
+  always('Dietician Consultation', 'dept-diet', 'DIET')
+  always('Physician Consultation', 'dept-phys', 'CONSULT')
+  always('Final Review & Report', 'dept-rev', 'REVIEW')
 
   return steps
 }

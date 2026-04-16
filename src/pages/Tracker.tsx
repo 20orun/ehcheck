@@ -17,7 +17,7 @@ const TRACKER_COLS = [
   { key: 'tmt', label: 'TMT' },
   { key: 'pft', label: 'PFT' },
   { key: 'lunch', label: 'LUN\nCH' },
-  { key: 'consultation', label: 'CON\nSULT' },
+  { key: 'consultation', label: 'PHY\nCON' },
   { key: 'd', label: 'D' },
 ]
 

@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { KPICard, StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { Play, CheckCircle2, ArrowUpDown } from 'lucide-react'
+import { Play, CheckCircle2, ArrowUpDown, Search } from 'lucide-react'
 import { useState } from 'react'
 
 type SortOption = 'vip-wait' | 'wait-desc' | 'wait-asc' | 'name-asc'
@@ -20,6 +20,7 @@ export default function DepartmentView() {
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [sortBy, setSortBy] = useState<SortOption>('vip-wait')
+  const [searchQuery, setSearchQuery] = useState('')
 
   if (!dept) return <EmptyState message="Department not found" />
 
@@ -28,6 +29,8 @@ export default function DepartmentView() {
 
   // Filter
   const filteredQueue = queue.filter((p) => {
+    // Name search filter
+    if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
     if (statusFilter === 'ALL') return true
     if (statusFilter === 'VIP') return p.priority === 'VIP'
     if (statusFilter === 'NORMAL') return p.priority === 'NORMAL'
@@ -71,6 +74,18 @@ export default function DepartmentView() {
         <KPICard title="Waiting" value={stats.waiting} color="yellow" />
         <KPICard title="Active" value={stats.active} color="primary" />
         <KPICard title="Avg Time" value={`${stats.avgTime} min`} color="gray" />
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search patient by name…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        />
       </div>
 
       {/* Filters */}

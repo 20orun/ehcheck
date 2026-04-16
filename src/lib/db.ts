@@ -3,17 +3,22 @@ import type { Department, DoctorCode, Package, PackageStep, Patient, PatientTask
 
 // ─── Fetch helpers ───────────────────────────────────
 
+const TASK_GROUP_ORDER: Record<string, number> = {
+  BILLING: 0, CHECK_IN: 1, NURSING: 2, PHLEB: 3, USG: 4, BREAKFAST: 5,
+  PPBS: 6, XRAY: 7, MAMMO: 8, BMD: 9, ECG: 10, ECHO: 11, TMT: 12,
+  PFT: 13, LUNCH: 14, DIET: 15, CONSULT: 16, REVIEW: 17,
+}
+
 export async function fetchDepartments(): Promise<Department[]> {
   const { data, error } = await supabase
     .from('departments')
     .select('id, name, task_group')
-    .order('name')
   if (error) throw error
   return (data ?? []).map((d) => ({
     id: d.id,
     name: d.name,
     task_group: d.task_group as TaskGroup,
-  }))
+  })).sort((a, b) => (TASK_GROUP_ORDER[a.task_group] ?? 99) - (TASK_GROUP_ORDER[b.task_group] ?? 99))
 }
 
 export async function fetchPackages(): Promise<Package[]> {
@@ -264,6 +269,14 @@ export async function updatePatientPackageDb(
     }))
   )
   if (insError) throw insError
+}
+
+export async function updateAssignedDoctorDb(patientId: string, doctor: DoctorCode): Promise<void> {
+  const { error } = await supabase
+    .from('patients')
+    .update({ assigned_doctor: doctor })
+    .eq('id', patientId)
+  if (error) throw error
 }
 
 export async function cancelTaskDb(taskId: string): Promise<void> {

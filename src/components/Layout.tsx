@@ -16,10 +16,13 @@ import {
   ChevronsRight,
   LogOut,
   CalendarDays,
+  FileSpreadsheet,
+  Stethoscope,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/store/AppContext'
 import { useAuth } from '@/store/AuthContext'
+import { DOCTORS } from '@/types'
 import clsx from 'clsx'
 
 const NAV_ITEMS = [
@@ -30,14 +33,25 @@ const NAV_ITEMS = [
   { to: '/register', icon: UserPlus, label: 'Register' },
   { to: '/packages', icon: PackageIcon, label: 'Packages' },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
+  { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report' },
 ]
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
   const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
   const { user, signOut } = useAuth()
   const location = useLocation()
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) setAccountOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -67,8 +81,17 @@ export default function Layout() {
               <p className="text-xs text-gray-500">Health Check Tracker</p>
             </div>
           )}
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className={clsx(
+              'hidden lg:flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors p-1',
+              collapsed ? '' : 'ml-auto'
+            )}
+          >
+            {collapsed ? <ChevronsRight className="w-5 h-5" /> : <ChevronsLeft className="w-5 h-5" />}
+          </button>
           {!collapsed && (
-            <button className="ml-auto lg:hidden" onClick={() => setSidebarOpen(false)}>
+            <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="w-5 h-5" />
             </button>
           )}
@@ -125,48 +148,38 @@ export default function Layout() {
               {!collapsed && dept.name}
             </NavLink>
           ))}
+
+          {!collapsed && (
+            <div className="pt-4 pb-2 px-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Doctors
+              </p>
+            </div>
+          )}
+          {collapsed && <div className="pt-4" />}
+          {DOCTORS.map((doc) => (
+            <NavLink
+              key={doc.code}
+              to={`/doctor/${doc.code}`}
+              onClick={() => setSidebarOpen(false)}
+              title={collapsed ? doc.name : undefined}
+              className={({ isActive }) =>
+                clsx(
+                  'flex items-center gap-3 rounded-lg text-sm transition-colors',
+                  collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2',
+                  isActive
+                    ? 'bg-primary-50 text-primary-700 font-medium'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                )
+              }
+            >
+              <Stethoscope className="w-4 h-4 shrink-0" />
+              {!collapsed && doc.name}
+            </NavLink>
+          ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-gray-200 shrink-0 space-y-1">
-          {!collapsed && user && (
-            <p className="text-xs text-gray-500 truncate px-3 pb-1" title={user.email}>
-              {user.email}
-            </p>
-          )}
-          <button
-            onClick={() => signOut()}
-            title={collapsed ? 'Sign Out' : undefined}
-            className={clsx(
-              'flex items-center gap-3 w-full rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors',
-              collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
-            )}
-          >
-            <LogOut className="w-5 h-5 shrink-0" />
-            {!collapsed && 'Sign Out'}
-          </button>
-          <button
-            onClick={() => { if (confirm('Reset all data back to initial state?')) resetData() }}
-            disabled={loading}
-            title={collapsed ? 'Reset All' : undefined}
-            className={clsx(
-              'flex items-center gap-3 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50',
-              collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
-            )}
-          >
-            <RotateCcw className="w-5 h-5 shrink-0" />
-            {!collapsed && 'Reset All'}
-          </button>
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            className={clsx(
-              'hidden lg:flex items-center gap-3 w-full rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors',
-              collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
-            )}
-          >
-            {collapsed ? <ChevronsRight className="w-5 h-5" /> : <ChevronsLeft className="w-5 h-5" />}
-            {!collapsed && 'Collapse'}
-          </button>
-        </div>
+
       </aside>
 
       {/* Main content */}
@@ -187,8 +200,37 @@ export default function Layout() {
             <Bell className="w-5 h-5 text-gray-500" />
           </div>
 
-          <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
-            <Users className="w-4 h-4 text-primary-600" />
+          <div className="relative" ref={accountRef}>
+            <button
+              onClick={() => setAccountOpen((o) => !o)}
+              className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center hover:ring-2 hover:ring-primary-300 transition"
+            >
+              <Users className="w-4 h-4 text-primary-600" />
+            </button>
+            {accountOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                {user && (
+                  <p className="text-xs text-gray-500 truncate px-4 pb-2 border-b border-gray-100" title={user.email}>
+                    {user.email}
+                  </p>
+                )}
+                <button
+                  onClick={() => { setAccountOpen(false); signOut() }}
+                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+                <button
+                  onClick={() => { if (confirm('Reset all data back to initial state?')) { setAccountOpen(false); resetData() } }}
+                  disabled={loading}
+                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset All
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -226,11 +268,13 @@ function getPageTitle(path: string): string {
   if (path === '/') return 'Master Dashboard'
   if (path.startsWith('/patient/')) return 'Patient Timeline'
   if (path.startsWith('/department/')) return 'Department View'
+  if (path.startsWith('/doctor/')) return 'Doctor Patients'
   if (path === '/coordinator') return 'Coordinator Panel'
   if (path === '/analytics') return 'Analytics & Reports'
   if (path === '/register') return 'Billing'
   if (path === '/tracker') return 'Patient Tracker'
   if (path === '/packages') return 'Packages'
   if (path === '/calendar') return 'Calendar'
+  if (path === '/daily-report') return 'Daily Report'
   return 'ExecuFlow'
 }
