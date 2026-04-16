@@ -94,6 +94,7 @@ export default function PatientDetail() {
   const [editStartTime, setEditStartTime] = useState('')
   const [editEndTime, setEditEndTime] = useState('')
   const [editingDoctor, setEditingDoctor] = useState(false)
+  const [editingPackage, setEditingPackage] = useState(false)
 
   const filteredBillingPackages = useMemo(() => {
     if (!billingPkgSearch.trim()) return state.packages
@@ -161,8 +162,15 @@ export default function PatientDetail() {
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">
-            UHID: {patient.uhid} &bull; {patient.package_name || <span className="italic text-gray-400">No package selected</span>}
+          <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1">
+            <span>UHID: {patient.uhid} &bull; {patient.package_name || <span className="italic text-gray-400">No package selected</span>}</span>
+            <button
+              onClick={() => { setEditingPackage(true); setBillingPkgSearch('') }}
+              className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"
+              title="Change package"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
           </p>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="text-sm text-gray-500">Doctor:</span>
@@ -601,13 +609,13 @@ export default function PatientDetail() {
       })()}
 
       {/* Package Selection Modal for Billing */}
-      {billingTaskId && !billingSelectedPkgId && (
+      {(billingTaskId || editingPackage) && !billingSelectedPkgId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[80vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-              <h3 className="text-lg font-semibold text-gray-900">Select Package</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{editingPackage ? 'Change Package' : 'Select Package'}</h3>
               <button
-                onClick={() => { setBillingTaskId(null); setBillingPkgSearch('') }}
+                onClick={() => { setBillingTaskId(null); setEditingPackage(false); setBillingPkgSearch('') }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -664,13 +672,13 @@ export default function PatientDetail() {
       )}
 
       {/* Doctor Selection Modal (step 2 of billing) */}
-      {billingTaskId && billingSelectedPkgId && (
+      {(billingTaskId || editingPackage) && billingSelectedPkgId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
               <h3 className="text-lg font-semibold text-gray-900">Assign Doctor</h3>
               <button
-                onClick={() => { setBillingTaskId(null); setBillingSelectedPkgId(null); setBillingPkgSearch('') }}
+                onClick={() => { setBillingTaskId(null); setEditingPackage(false); setBillingSelectedPkgId(null); setBillingPkgSearch('') }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -681,13 +689,9 @@ export default function PatientDetail() {
                 <button
                   key={doc.code}
                   onClick={() => {
-                    const isCurrent = billingSelectedPkgId === patient.package_id
-                    if (!isCurrent) {
-                      updatePatientPackage(patient.id, billingSelectedPkgId, doc.code)
-                    } else {
-                      updatePatientPackage(patient.id, billingSelectedPkgId, doc.code)
-                    }
+                    updatePatientPackage(patient.id, billingSelectedPkgId, doc.code)
                     setBillingTaskId(null)
+                    setEditingPackage(false)
                     setBillingSelectedPkgId(null)
                     setBillingPkgSearch('')
                   }}
@@ -702,6 +706,7 @@ export default function PatientDetail() {
               <button
                 onClick={() => { setBillingSelectedPkgId(null) }}
                 className="mt-1 text-sm text-gray-500 hover:text-gray-700 underline text-center"
+                type="button"
               >
                 Back to package selection
               </button>
