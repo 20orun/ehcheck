@@ -31,21 +31,33 @@ export async function fetchPackages(): Promise<Package[]> {
 }
 
 export async function fetchPackageSteps(): Promise<PackageStep[]> {
-  const { data, error } = await supabase
-    .from('package_steps')
-    .select('id, package_id, step_name, department_id, step_order, task_group, is_mandatory')
-    .order('package_id')
-    .order('step_order')
-  if (error) throw error
-  return (data ?? []).map((s) => ({
-    id: s.id,
-    package_id: s.package_id,
-    step_name: s.step_name,
-    department_id: s.department_id,
-    step_order: s.step_order,
-    task_group: s.task_group as TaskGroup,
-    is_mandatory: s.is_mandatory,
-  }))
+  const PAGE = 1000
+  const all: PackageStep[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('package_steps')
+      .select('id, package_id, step_name, department_id, step_order, task_group, is_mandatory')
+      .order('package_id')
+      .order('step_order')
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data ?? []
+    for (const s of rows) {
+      all.push({
+        id: s.id,
+        package_id: s.package_id,
+        step_name: s.step_name,
+        department_id: s.department_id,
+        step_order: s.step_order,
+        task_group: s.task_group as TaskGroup,
+        is_mandatory: s.is_mandatory,
+      })
+    }
+    if (rows.length < PAGE) break
+    from += PAGE
+  }
+  return all
 }
 
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {

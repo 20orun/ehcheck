@@ -196,9 +196,9 @@ export function getNextBestTask(
 
 // ─── Patient Completion Logic ────────────────────────
 export function isPatientComplete(tasks: PatientTask[]): boolean {
-  return tasks
-    .filter((t) => t.is_mandatory)
-    .every((t) => t.status === 'COMPLETED')
+  const mandatory = tasks.filter((t) => t.is_mandatory)
+  if (mandatory.length === 0) return false
+  return mandatory.every((t) => t.status === 'COMPLETED')
 }
 
 // ─── Group Status Derivation ─────────────────────────
