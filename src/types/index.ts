@@ -13,6 +13,7 @@ export interface Department {
   id: string
   name: string
   task_group: TaskGroup
+  is_offline: boolean
 }
 
 export interface Package {
@@ -159,4 +160,17 @@ export interface TaskScore {
   score: number
   queue_length: number
   avg_wait_time: number
+}
+
+// ─── Cross Consultations ─────────────────────────────
+export type CrossConsultationStatus = 'BOOKED' | 'IN_PROGRESS' | 'COMPLETED'
+
+export interface CrossConsultation {
+  id: string
+  patient_id: string
+  department_name: string
+  doctor_name: string
+  status: CrossConsultationStatus
+  notes: string
+  created_at: string
 }

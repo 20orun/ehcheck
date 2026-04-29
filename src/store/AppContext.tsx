@@ -14,6 +14,8 @@ import type {
   DoctorCode,
   Package,
   PackageStep,
+  CrossConsultation,
+  CrossConsultationStatus,
 } from '@/types'
 import {
   DEFAULT_ALERT_CONFIG,
@@ -47,6 +49,12 @@ import {
   updatePackageDb,
   insertPackageStepsDb,
   deletePackageStepsDb,
+  fetchCrossConsultations,
+  insertCrossConsultationDb,
+  updateCrossConsultationStatusDb,
+  updateCrossConsultationDb,
+  deleteCrossConsultationDb,
+  updateDeptOfflineStatus,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -57,6 +65,7 @@ interface AppState {
   packages: Package[]
   packageSteps: PackageStep[]
   alertConfig: AlertConfig
+  crossConsultations: CrossConsultation[]
 }
 
 type Action =
@@ -77,6 +86,12 @@ type Action =
   | { type: 'UPDATE_ASSIGNED_DOCTOR'; payload: { patientId: string; doctor: DoctorCode } }
   | { type: 'UPDATE_ALERT_CONFIG'; payload: Partial<AlertConfig> }
   | { type: 'SET_ALL_DATA'; payload: { patients: Patient[]; patientTasks: PatientTask[]; departments: Department[]; packages: Package[]; packageSteps: PackageStep[] } }
+  | { type: 'SET_CROSS_CONSULTATIONS'; payload: CrossConsultation[] }
+  | { type: 'ADD_CROSS_CONSULTATION'; payload: CrossConsultation }
+  | { type: 'UPDATE_CROSS_CONSULTATION_STATUS'; payload: { id: string; status: CrossConsultationStatus } }
+  | { type: 'UPDATE_CROSS_CONSULTATION'; payload: CrossConsultation }
+  | { type: 'DELETE_CROSS_CONSULTATION'; payload: { id: string } }
+  | { type: 'UPDATE_DEPT_OFFLINE'; payload: { deptId: string; isOffline: boolean } }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -223,6 +238,36 @@ function reducer(state: AppState, action: Action): AppState {
         packages: action.payload.packages,
         packageSteps: action.payload.packageSteps,
       }
+    case 'SET_CROSS_CONSULTATIONS':
+      return { ...state, crossConsultations: action.payload }
+    case 'ADD_CROSS_CONSULTATION':
+      return { ...state, crossConsultations: [...state.crossConsultations, action.payload] }
+    case 'UPDATE_CROSS_CONSULTATION_STATUS':
+      return {
+        ...state,
+        crossConsultations: state.crossConsultations.map((cc) =>
+          cc.id === action.payload.id ? { ...cc, status: action.payload.status } : cc
+        ),
+      }
+    case 'UPDATE_CROSS_CONSULTATION':
+      return {
+        ...state,
+        crossConsultations: state.crossConsultations.map((cc) =>
+          cc.id === action.payload.id ? action.payload : cc
+        ),
+      }
+    case 'DELETE_CROSS_CONSULTATION':
+      return {
+        ...state,
+        crossConsultations: state.crossConsultations.filter((cc) => cc.id !== action.payload.id),
+      }
+    case 'UPDATE_DEPT_OFFLINE':
+      return {
+        ...state,
+        departments: state.departments.map((d) =>
+          d.id === action.payload.deptId ? { ...d, is_offline: action.payload.isOffline } : d
+        ),
+      }
     default:
       return state
   }
@@ -268,6 +313,15 @@ interface AppContextType {
   holidays: Set<string>
   toggleHoliday: (date: string) => void
   isHoliday: (date: string) => boolean
+  // Cross Consultations
+  getCrossConsultationsForPatient: (patientId: string) => CrossConsultation[]
+  addCrossConsultation: (patientId: string, departmentName: string, doctorName: string, notes?: string) => void
+  updateCrossConsultationStatus: (id: string, status: CrossConsultationStatus) => void
+  editCrossConsultation: (id: string, departmentName: string, doctorName: string, notes: string) => void
+  deleteCrossConsultation: (id: string) => void
+  // Department online/offline
+  toggleDeptOffline: (deptId: string) => void
+  isDeptOffline: (deptId: string) => boolean
   // Legacy aliases
   getPatientsWithSteps: () => PatientWithTasks[]
   startStep: (taskId: string) => void
@@ -286,6 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     packages: [],
     packageSteps: [],
     alertConfig: DEFAULT_ALERT_CONFIG,
+    crossConsultations: [],
   })
 
   const [loading, setLoading] = useState(true)
@@ -304,6 +359,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return stored ? new Set(JSON.parse(stored)) : new Set()
     } catch { return new Set() }
   })
+
   const isViewingPastDate = selectedDate !== getTodayStr()
 
   // Load data from Supabase on mount & when selectedDate changes
@@ -319,6 +375,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         dispatch({ type: 'SET_ALL_DATA', payload: data })
         setClinicDates(dates)
+        const patientIds = data.patients.map((p) => p.id)
+        fetchCrossConsultations(patientIds).then((ccs) => {
+          if (!cancelled) dispatch({ type: 'SET_CROSS_CONSULTATIONS', payload: ccs })
+        }).catch(console.error)
       })
       .catch((err) => {
         if (cancelled) return
@@ -350,6 +410,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const d = new Date(date + 'T00:00:00')
     return d.getDay() === 0 // Sunday
   }, [holidays])
+
+  const toggleDeptOffline = useCallback((deptId: string) => {
+    const dept = state.departments.find((d) => d.id === deptId)
+    if (!dept) return
+    const next = !dept.is_offline
+    dispatch({ type: 'UPDATE_DEPT_OFFLINE', payload: { deptId, isOffline: next } })
+    updateDeptOfflineStatus(deptId, next).catch((err) =>
+      console.warn('Failed to persist dept offline status:', err)
+    )
+  }, [state.departments])
+
+  const isDeptOffline = useCallback((deptId: string) => {
+    return state.departments.find((d) => d.id === deptId)?.is_offline ?? false
+  }, [state.departments])
 
   /** Guard: block mutations when viewing a past date */
   const getTodayStrNow = () => {
@@ -712,6 +786,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const task = state.patientTasks.find((t) => t.id === taskId)
     if (!task) return
 
+    // Block starting tasks for offline departments
+    if (state.departments.find((d) => d.id === task.department_id)?.is_offline) return
+
     // Patient must be checked in before any task can start
     const patient = state.patients.find((p) => p.id === task.patient_id)
     if (!patient?.checked_in_at) return
@@ -736,7 +813,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dbUpdateTaskStatus(taskId, 'IN_PROGRESS', ts).catch((err) =>
       console.warn('Failed to persist task start:', err)
     )
-  }, [state.patientTasks, state.patients, selectedDate])
+  }, [state.patientTasks, state.patients, state.departments, selectedDate])
 
   const completeTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
@@ -934,6 +1011,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [state.patientTasks, state.patients, completeTask, startTask, selectedDate]
   )
 
+  // ─── Cross Consultation actions ──────────────────
+  const getCrossConsultationsForPatient = useCallback(
+    (patientId: string) => state.crossConsultations.filter((cc) => cc.patient_id === patientId),
+    [state.crossConsultations]
+  )
+
+  const addCrossConsultation = useCallback(
+    (patientId: string, departmentName: string, doctorName: string, notes = '') => {
+      const cc: CrossConsultation = {
+        id: crypto.randomUUID(),
+        patient_id: patientId,
+        department_name: departmentName,
+        doctor_name: doctorName,
+        status: 'BOOKED',
+        notes,
+        created_at: new Date().toISOString(),
+      }
+      dispatch({ type: 'ADD_CROSS_CONSULTATION', payload: cc })
+      insertCrossConsultationDb(cc).catch((err) => console.warn('Failed to persist cross consultation:', err))
+    },
+    []
+  )
+
+  const updateCrossConsultationStatus = useCallback(
+    (id: string, status: CrossConsultationStatus) => {
+      dispatch({ type: 'UPDATE_CROSS_CONSULTATION_STATUS', payload: { id, status } })
+      updateCrossConsultationStatusDb(id, status).catch((err) => console.warn('Failed to update cross consultation status:', err))
+    },
+    []
+  )
+
+  const editCrossConsultation = useCallback(
+    (id: string, departmentName: string, doctorName: string, notes: string) => {
+      const existing = state.crossConsultations.find((cc) => cc.id === id)
+      if (!existing) return
+      const updated: CrossConsultation = { ...existing, department_name: departmentName, doctor_name: doctorName, notes }
+      dispatch({ type: 'UPDATE_CROSS_CONSULTATION', payload: updated })
+      updateCrossConsultationDb({ id, department_name: departmentName, doctor_name: doctorName, notes })
+        .catch((err) => console.warn('Failed to edit cross consultation:', err))
+    },
+    [state.crossConsultations]
+  )
+
+  const deleteCrossConsultation = useCallback(
+    (id: string) => {
+      dispatch({ type: 'DELETE_CROSS_CONSULTATION', payload: { id } })
+      deleteCrossConsultationDb(id).catch((err) => console.warn('Failed to delete cross consultation:', err))
+    },
+    []
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -973,6 +1101,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         holidays,
         toggleHoliday,
         isHoliday,
+        // Cross Consultations
+        getCrossConsultationsForPatient,
+        addCrossConsultation,
+        updateCrossConsultationStatus,
+        editCrossConsultation,
+        deleteCrossConsultation,
+        // Department online/offline
+        toggleDeptOffline,
+        isDeptOffline,
         // Legacy aliases
         getPatientsWithSteps: getPatientsWithTasks,
         startStep: startTask,

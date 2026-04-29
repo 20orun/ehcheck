@@ -1,10 +1,10 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2, Plus, BookOpen, Clock3 } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
-import type { TaskGroup, PatientTask } from '@/types'
+import type { CrossConsultation, CrossConsultationStatus, TaskGroup, PatientTask } from '@/types'
 import { getTaskGroupStatuses, isPatientComplete, getAvailableTasks } from '@/lib/taskEngine'
 import { DOCTORS } from '@/types'
 
@@ -41,6 +41,18 @@ const PKG_COLORS: Record<string, { border: string; bg: string; badge: string; te
 
 const DEFAULT_PKG_COLOR = { border: 'border-gray-200', bg: 'bg-white', badge: 'bg-gray-100 text-gray-600', text: 'text-gray-700' }
 
+const CC_STATUS_CONFIG: Record<CrossConsultationStatus, { label: string; bg: string; text: string; border: string }> = {
+  BOOKED:      { label: 'Booked',      bg: 'bg-blue-50',   text: 'text-blue-700',  border: 'border-blue-200' },
+  IN_PROGRESS: { label: 'In Progress', bg: 'bg-amber-50',  text: 'text-amber-700', border: 'border-amber-200' },
+  COMPLETED:   { label: 'Completed',   bg: 'bg-green-50',  text: 'text-green-700', border: 'border-green-200' },
+}
+
+const COMMON_DEPARTMENTS = [
+  'Cardiology','Dermatology','Endocrinology','ENT','Gastroenterology',
+  'General Surgery','Gynaecology','Nephrology','Neurology','Oncology',
+  'Ophthalmology','Orthopaedics','Psychiatry','Pulmonology','Rheumatology','Urology',
+]
+
 function TaskIcon({ status }: { status: PatientTask['status'] }) {
   if (status === 'COMPLETED') return <CheckCircle2 className="w-5 h-5 text-green-600" />
   if (status === 'IN_PROGRESS') return <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
@@ -71,7 +83,7 @@ function useElapsedTimer(checkedInAt: string | null, completedAt: string | null)
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation } = useApp()
   const patient = getPatientById(id!)
 
   // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
@@ -96,6 +108,14 @@ export default function PatientDetail() {
   const [editingDoctor, setEditingDoctor] = useState(false)
   const [editingPackage, setEditingPackage] = useState(false)
 
+  // Cross consultation state
+  const [showAddCC, setShowAddCC] = useState(false)
+  const [editingCC, setEditingCC] = useState<CrossConsultation | null>(null)
+  const [ccDept, setCCDept] = useState('')
+  const [ccDoctor, setCCDoctor] = useState('')
+  const [ccNotes, setCCNotes] = useState('')
+  const [ccDeptSuggestions, setCCDeptSuggestions] = useState(false)
+
   const filteredBillingPackages = useMemo(() => {
     if (!billingPkgSearch.trim()) return state.packages
     const q = billingPkgSearch.toLowerCase()
@@ -107,6 +127,7 @@ export default function PatientDetail() {
   }
 
   const tasks = patient.tasks
+  const crossConsultations = getCrossConsultationsForPatient(patient.id)
   const completedTasks = tasks.filter((t) => t.status === 'COMPLETED').length
   const mandatoryTasks = tasks.filter((t) => t.is_mandatory)
   const mandatoryCompleted = mandatoryTasks.filter((t) => t.status === 'COMPLETED').length
@@ -557,6 +578,182 @@ export default function PatientDetail() {
           </div>
         ))}
       </div>
+
+      {/* Cross Consultations */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-primary-500" />
+            Cross Consultations
+            {crossConsultations.length > 0 && (
+              <span className="text-xs font-medium bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded-full">
+                {crossConsultations.length}
+              </span>
+            )}
+          </h3>
+          <button
+            onClick={() => { setShowAddCC(true); setCCDept(''); setCCDoctor(''); setCCNotes('') }}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
+        </div>
+
+        {crossConsultations.length === 0 && (
+          <div className="px-4 py-4 text-xs text-gray-400 italic">No cross consultations assigned</div>
+        )}
+
+        {crossConsultations.length > 0 && (
+          <div className="divide-y divide-gray-50">
+            {crossConsultations.map((cc) => {
+              const cfg = CC_STATUS_CONFIG[cc.status]
+              return (
+                <div key={cc.id} className="px-4 py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-gray-900">{cc.department_name}</span>
+                      {cc.doctor_name && (
+                        <span className="text-xs text-gray-500">&bull; {cc.doctor_name}</span>
+                      )}
+                      <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border', cfg.bg, cfg.text, cfg.border)}>
+                        {cc.status === 'BOOKED' && <BookOpen className="w-3 h-3" />}
+                        {cc.status === 'IN_PROGRESS' && <Clock3 className="w-3 h-3" />}
+                        {cc.status === 'COMPLETED' && <CheckCircle2 className="w-3 h-3" />}
+                        {cfg.label}
+                      </span>
+                    </div>
+                    {cc.notes && <p className="text-xs text-gray-400 mt-0.5">{cc.notes}</p>}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {cc.status === 'BOOKED' && (
+                      <button
+                        onClick={() => updateCrossConsultationStatus(cc.id, 'IN_PROGRESS')}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                      >
+                        <Loader2 className="w-3 h-3" /> Start
+                      </button>
+                    )}
+                    {cc.status === 'IN_PROGRESS' && (
+                      <button
+                        onClick={() => updateCrossConsultationStatus(cc.id, 'COMPLETED')}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+                      >
+                        <CheckCircle2 className="w-3 h-3" /> Done
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setEditingCC(cc); setCCDept(cc.department_name); setCCDoctor(cc.doctor_name); setCCNotes(cc.notes) }}
+                      className="inline-flex items-center p-1.5 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-100 transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm('Remove this cross consultation?')) deleteCrossConsultation(cc.id) }}
+                      className="inline-flex items-center p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Cross Consultation Modal */}
+      {(showAddCC || editingCC) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">
+                {editingCC ? 'Edit Cross Consultation' : 'Add Cross Consultation'}
+              </h3>
+              <button
+                onClick={() => { setShowAddCC(false); setEditingCC(null) }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Department <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={ccDept}
+                  onChange={(e) => { setCCDept(e.target.value); setCCDeptSuggestions(true) }}
+                  onFocus={() => setCCDeptSuggestions(true)}
+                  onBlur={() => setTimeout(() => setCCDeptSuggestions(false), 150)}
+                  placeholder="e.g. Cardiology"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  autoFocus
+                />
+                {ccDeptSuggestions && (
+                  <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {COMMON_DEPARTMENTS.filter((d) => !ccDept || d.toLowerCase().includes(ccDept.toLowerCase())).map((s) => (
+                      <li
+                        key={s}
+                        onMouseDown={() => { setCCDept(s); setCCDeptSuggestions(false) }}
+                        className="px-3 py-2 text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-700 cursor-pointer"
+                      >
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Doctor Name</label>
+                <input
+                  type="text"
+                  value={ccDoctor}
+                  onChange={(e) => setCCDoctor(e.target.value)}
+                  placeholder="e.g. Dr. Smith"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={ccNotes}
+                  onChange={(e) => setCCNotes(e.target.value)}
+                  placeholder="Optional notes..."
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => { setShowAddCC(false); setEditingCC(null) }}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!ccDept.trim()) return
+                  if (editingCC) {
+                    editCrossConsultation(editingCC.id, ccDept.trim(), ccDoctor.trim(), ccNotes.trim())
+                    setEditingCC(null)
+                  } else {
+                    addCrossConsultation(patient.id, ccDept.trim(), ccDoctor.trim(), ccNotes.trim())
+                    setShowAddCC(false)
+                  }
+                }}
+                disabled={!ccDept.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Check className="w-4 h-4" />
+                {editingCC ? 'Save Changes' : 'Add Consultation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Adjust Times button – redistributes step times between check-in and Final Review */}
       {(() => {

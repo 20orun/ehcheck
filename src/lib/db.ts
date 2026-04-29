@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Department, DoctorCode, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority } from '@/types'
+import type { CrossConsultation, CrossConsultationStatus, Department, DoctorCode, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority } from '@/types'
 
 // ─── Fetch helpers ───────────────────────────────────
 
@@ -12,13 +12,22 @@ const TASK_GROUP_ORDER: Record<string, number> = {
 export async function fetchDepartments(): Promise<Department[]> {
   const { data, error } = await supabase
     .from('departments')
-    .select('id, name, task_group')
+    .select('id, name, task_group, is_offline')
   if (error) throw error
   return (data ?? []).map((d) => ({
     id: d.id,
     name: d.name,
     task_group: d.task_group as TaskGroup,
+    is_offline: d.is_offline ?? false,
   })).sort((a, b) => (TASK_GROUP_ORDER[a.task_group] ?? 99) - (TASK_GROUP_ORDER[b.task_group] ?? 99))
+}
+
+export async function updateDeptOfflineStatus(deptId: string, isOffline: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('departments')
+    .update({ is_offline: isOffline })
+    .eq('id', deptId)
+  if (error) throw error
 }
 
 export async function fetchPackages(): Promise<Package[]> {
@@ -395,5 +404,71 @@ export async function insertPackageStepsDb(steps: PackageStep[]): Promise<void> 
 
 export async function deletePackageStepsDb(packageId: string): Promise<void> {
   const { error } = await supabase.from('package_steps').delete().eq('package_id', packageId)
+  if (error) throw error
+}
+
+// ─── Cross Consultations ─────────────────────────────
+
+export async function fetchCrossConsultations(patientIds?: string[]): Promise<CrossConsultation[]> {
+  let query = supabase
+    .from('cross_consultations')
+    .select('id, patient_id, department_name, doctor_name, status, notes, created_at')
+    .order('created_at')
+  if (patientIds && patientIds.length > 0) {
+    query = query.in('patient_id', patientIds)
+  } else if (patientIds && patientIds.length === 0) {
+    return []
+  }
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    patient_id: r.patient_id,
+    department_name: r.department_name,
+    doctor_name: r.doctor_name,
+    status: r.status as CrossConsultationStatus,
+    notes: r.notes,
+    created_at: r.created_at,
+  }))
+}
+
+export async function insertCrossConsultationDb(cc: CrossConsultation): Promise<void> {
+  const { error } = await supabase.from('cross_consultations').insert({
+    id: cc.id,
+    patient_id: cc.patient_id,
+    department_name: cc.department_name,
+    doctor_name: cc.doctor_name,
+    status: cc.status,
+    notes: cc.notes,
+    created_at: cc.created_at,
+  })
+  if (error) throw error
+}
+
+export async function updateCrossConsultationStatusDb(
+  id: string,
+  status: CrossConsultationStatus
+): Promise<void> {
+  const { error } = await supabase
+    .from('cross_consultations')
+    .update({ status })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function updateCrossConsultationDb(cc: Partial<CrossConsultation> & { id: string }): Promise<void> {
+  const { id, ...fields } = cc
+  const { error } = await supabase
+    .from('cross_consultations')
+    .update(fields)
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteCrossConsultationDb(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('cross_consultations')
+    .delete()
+    .eq('id', id)
   if (error) throw error
 }

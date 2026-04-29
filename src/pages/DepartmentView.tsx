@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { KPICard, StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { Play, CheckCircle2, ArrowUpDown, Search } from 'lucide-react'
+import { Play, CheckCircle2, ArrowUpDown, Search, Wifi, WifiOff } from 'lucide-react'
 import { useState } from 'react'
 
 type SortOption = 'vip-wait' | 'wait-desc' | 'wait-asc' | 'name-asc'
@@ -15,7 +15,7 @@ const SORT_OPTIONS: { key: SortOption; label: string }[] = [
 
 export default function DepartmentView() {
   const { id } = useParams<{ id: string }>()
-  const { state, getDepartmentQueue, getDepartmentStats, startTask, completeTask } = useApp()
+  const { state, getDepartmentQueue, getDepartmentStats, startTask, completeTask, isDeptOffline, toggleDeptOffline } = useApp()
   const dept = state.departments.find((d) => d.id === id)
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
@@ -24,6 +24,7 @@ export default function DepartmentView() {
 
   if (!dept) return <EmptyState message="Department not found" />
 
+  const isOffline = isDeptOffline(id!)
   const queue = getDepartmentQueue(id!)
   const stats = getDepartmentStats(id!)
 
@@ -67,7 +68,30 @@ export default function DepartmentView() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{dept.name}</h2>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h2 className="text-xl font-bold text-gray-900">{dept.name}</h2>
+        <button
+          onClick={() => toggleDeptOffline(id!)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+            isOffline
+              ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+              : 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+          }`}
+        >
+          {isOffline ? (
+            <><Wifi className="w-4 h-4" /> Go Online</>
+          ) : (
+            <><WifiOff className="w-4 h-4" /> Go Offline</>
+          )}
+        </button>
+      </div>
+
+      {isOffline && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <span>This department is <strong>offline</strong> — patients cannot be started here until you go online.</span>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -164,9 +188,14 @@ export default function DepartmentView() {
                 <div className="flex items-center gap-1">
                   {p.currentStep?.status === 'NOT_STARTED' && (
                     <button
-                      onClick={() => startTask(p.currentStep!.id)}
-                      className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                      title="Start task"
+                      onClick={() => !isOffline && startTask(p.currentStep!.id)}
+                      disabled={isOffline}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        isOffline
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                      }`}
+                      title={isOffline ? 'Department offline' : 'Start task'}
                     >
                       <Play className="w-4 h-4" />
                     </button>

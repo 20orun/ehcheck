@@ -18,6 +18,7 @@ import {
   CalendarDays,
   FileSpreadsheet,
   Stethoscope,
+  BookOpen,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/store/AppContext'
@@ -27,6 +28,7 @@ import clsx from 'clsx'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/departments', icon: Building2, label: 'Departments' },
   { to: '/coordinator', icon: Sliders, label: 'Coordinator' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/tracker', icon: ClipboardList, label: 'Tracker' },
@@ -34,6 +36,7 @@ const NAV_ITEMS = [
   { to: '/packages', icon: PackageIcon, label: 'Packages' },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report' },
+  { to: '/cross-consultations', icon: BookOpen, label: 'Cross Consults' },
 ]
 
 export default function Layout() {
@@ -276,5 +279,6 @@ function getPageTitle(path: string): string {
   if (path === '/packages') return 'Packages'
   if (path === '/calendar') return 'Calendar'
   if (path === '/daily-report') return 'Daily Report'
+  if (path === '/departments') return 'Department Overview'
   return 'ExecuFlow'
 }

@@ -13,6 +13,8 @@ import Tracker from '@/pages/Tracker'
 import Packages from '@/pages/Packages'
 import Calendar from '@/pages/Calendar'
 import DailyReport from '@/pages/DailyReport'
+import CrossConsultations from '@/pages/CrossConsultations'
+import DepartmentDashboard from '@/pages/DepartmentDashboard'
 import Auth from '@/pages/Auth'
 
 function AppRoutes() {
@@ -49,6 +51,8 @@ function AppRoutes() {
           <Route path="/packages" element={<Packages />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/daily-report" element={<DailyReport />} />
+          <Route path="/cross-consultations" element={<CrossConsultations />} />
+          <Route path="/departments" element={<DepartmentDashboard />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
