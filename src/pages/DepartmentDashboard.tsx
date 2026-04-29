@@ -67,10 +67,25 @@ export default function DepartmentDashboard() {
     ).size
   }
 
+  // True waiting: prior steps (by step_order) all completed, task is NOT_STARTED here
   function getWaitingPatientsCount(deptId: string): number {
-    return new Set(
+    const deptTaskPatients = [...new Set(
       state.patientTasks
         .filter((t) => t.department_id === deptId && t.status === 'NOT_STARTED')
+        .map((t) => t.patient_id)
+    )]
+    return deptTaskPatients.filter((pid) => {
+      const allTasks = state.patientTasks.filter((t) => t.patient_id === pid)
+      const deptTask = allTasks.find((t) => t.department_id === deptId && t.status === 'NOT_STARTED')
+      if (!deptTask) return false
+      return !allTasks.some((t) => t.step_order < deptTask.step_order && t.status !== 'COMPLETED')
+    }).length
+  }
+
+  function getRemainingPatientsCount(deptId: string): number {
+    return new Set(
+      state.patientTasks
+        .filter((t) => t.department_id === deptId && t.status !== 'COMPLETED')
         .map((t) => t.patient_id)
     ).size
   }
@@ -117,6 +132,7 @@ export default function DepartmentDashboard() {
           const cfg = STATUS_CONFIG[status]
           const active = getActivePatientsCount(dept.id)
           const waiting = getWaitingPatientsCount(dept.id)
+          const remaining = getRemainingPatientsCount(dept.id)
           const isOffline = status === 'offline'
 
           return (
@@ -154,11 +170,16 @@ export default function DepartmentDashboard() {
                   )}
                   {waiting > 0 && (
                     <div className="flex items-center gap-1.5">
-                      <Users className="w-3 h-3 text-gray-400" />
+                      <Users className="w-3 h-3 text-blue-400" />
                       <span>{waiting} waiting</span>
                     </div>
                   )}
-                  {active === 0 && waiting === 0 && !isOffline && (
+                  {remaining > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-400">{remaining} remaining today</span>
+                    </div>
+                  )}
+                  {active === 0 && waiting === 0 && remaining === 0 && !isOffline && (
                     <div className="text-green-600 text-xs">Ready for next patient</div>
                   )}
                   {isOffline && (

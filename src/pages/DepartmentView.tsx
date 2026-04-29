@@ -94,9 +94,10 @@ export default function DepartmentView() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <KPICard title="Waiting" value={stats.waiting} color="yellow" />
         <KPICard title="Active" value={stats.active} color="primary" />
+        <KPICard title="Remaining" value={stats.remaining} color="gray" />
         <KPICard title="Avg Time" value={`${stats.avgTime} min`} color="gray" />
       </div>
 

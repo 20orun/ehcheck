@@ -290,7 +290,7 @@ interface AppContextType {
   getDashboardKPIs: () => DashboardKPIs
   getAlerts: () => Alert[]
   getDepartmentQueue: (departmentId: string) => PatientWithCurrentStep[]
-  getDepartmentStats: (departmentId: string) => { waiting: number; active: number; avgTime: number }
+  getDepartmentStats: (departmentId: string) => { waiting: number; remaining: number; active: number; avgTime: number }
   getNextTask: (patientId: string) => PatientTask | null
   // Actions
   registerPatient: (name: string, uhid: string, packageId: string | null, priority: Priority) => void
@@ -674,23 +674,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getDepartmentStats = useCallback(
     (departmentId: string) => {
       const deptTasks = state.patientTasks.filter((t) => t.department_id === departmentId)
+      const patientIds = [...new Set(deptTasks.map((t) => t.patient_id))]
 
-      // Count unique patients with active tasks in this department
+      // Active: currently being seen (IN_PROGRESS or DELAYED)
       const activePatients = new Set(
         deptTasks
           .filter((t) => t.status === 'IN_PROGRESS' || t.status === 'DELAYED')
           .map((t) => t.patient_id)
       )
 
-      // Count unique patients with available (startable) tasks in this department
+      // Remaining: patients who have any non-completed task in this dept
+      const remainingPatients = new Set(
+        deptTasks
+          .filter((t) => t.status !== 'COMPLETED')
+          .map((t) => t.patient_id)
+      )
+
+      // True waiting: patient has a NOT_STARTED task here AND all tasks
+      // with a lower step_order in their package are already COMPLETED
       const waitingPatients = new Set<string>()
-      const patientIds = [...new Set(deptTasks.map((t) => t.patient_id))]
       for (const pid of patientIds) {
-        if (activePatients.has(pid)) continue // already counted as active
+        if (activePatients.has(pid)) continue
         const allPatientTasks = state.patientTasks.filter((t) => t.patient_id === pid)
-        const patientObj = state.patients.find((p) => p.id === pid)
-        const available = getAvailableTasks(allPatientTasks, !!patientObj?.checked_in_at)
-        if (available.some((t) => t.department_id === departmentId)) {
+        const deptTask = allPatientTasks.find(
+          (t) => t.department_id === departmentId && t.status === 'NOT_STARTED'
+        )
+        if (!deptTask) continue
+        const priorIncomplete = allPatientTasks.some(
+          (t) => t.step_order < deptTask.step_order && t.status !== 'COMPLETED'
+        )
+        if (!priorIncomplete) {
           waitingPatients.add(pid)
         }
       }
@@ -702,7 +715,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return sum + (new Date(t.completed_at!).getTime() - new Date(t.started_at!).getTime()) / 60000
             }, 0) / completed.length
           : 0
-      return { waiting: waitingPatients.size, active: activePatients.size, avgTime: Math.round(avgTime) }
+      return { waiting: waitingPatients.size, remaining: remainingPatients.size, active: activePatients.size, avgTime: Math.round(avgTime) }
     },
     [state.patientTasks]
   )
