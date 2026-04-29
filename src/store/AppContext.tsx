@@ -1,4 +1,5 @@
 import { createContext, useContext, useReducer, useCallback, type ReactNode, useEffect, useRef, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import type {
   Patient,
   PatientTask,
@@ -92,6 +93,8 @@ type Action =
   | { type: 'UPDATE_CROSS_CONSULTATION'; payload: CrossConsultation }
   | { type: 'DELETE_CROSS_CONSULTATION'; payload: { id: string } }
   | { type: 'UPDATE_DEPT_OFFLINE'; payload: { deptId: string; isOffline: boolean } }
+  | { type: 'UPSERT_PATIENT'; payload: Patient }
+  | { type: 'UPSERT_TASK'; payload: PatientTask }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -268,6 +271,24 @@ function reducer(state: AppState, action: Action): AppState {
           d.id === action.payload.deptId ? { ...d, is_offline: action.payload.isOffline } : d
         ),
       }
+    case 'UPSERT_PATIENT': {
+      const exists = state.patients.some((p) => p.id === action.payload.id)
+      return {
+        ...state,
+        patients: exists
+          ? state.patients.map((p) => p.id === action.payload.id ? action.payload : p)
+          : [...state.patients, action.payload],
+      }
+    }
+    case 'UPSERT_TASK': {
+      const exists = state.patientTasks.some((t) => t.id === action.payload.id)
+      return {
+        ...state,
+        patientTasks: exists
+          ? state.patientTasks.map((t) => t.id === action.payload.id ? action.payload : t)
+          : [...state.patientTasks, action.payload],
+      }
+    }
     default:
       return state
   }
@@ -390,6 +411,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
     return () => { cancelled = true }
   }, [selectedDate])
+
+  // ─── Supabase Realtime subscriptions ─────────────
+  // Keep selectedDate accessible in the handler via a ref to avoid
+  // re-subscribing on every date change.
+  const selectedDateRef = useRef(selectedDate)
+  useEffect(() => { selectedDateRef.current = selectedDate }, [selectedDate])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('hcheck-realtime')
+      // Department offline toggle
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'departments' },
+        (payload) => {
+          const d = payload.new as { id: string; name: string; task_group: string; is_offline: boolean }
+          dispatch({
+            type: 'UPDATE_DEPT_OFFLINE',
+            payload: { deptId: d.id, isOffline: d.is_offline },
+          })
+        }
+      )
+      // Patient task status changes (started / completed / delayed from any device)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'patient_tasks' },
+        (payload) => {
+          const t = payload.new as PatientTask
+          dispatch({ type: 'UPSERT_TASK', payload: t })
+        }
+      )
+      // New tasks inserted (e.g. package assignment from another device)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'patient_tasks' },
+        (payload) => {
+          const t = payload.new as PatientTask
+          dispatch({ type: 'UPSERT_TASK', payload: t })
+        }
+      )
+      // Patient updates (check-in, priority changes) from another device
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'patients' },
+        (payload) => {
+          const p = payload.new as Patient
+          dispatch({ type: 'UPSERT_PATIENT', payload: p })
+        }
+      )
+      // New patient registered from another device — only apply if same clinic date
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'patients' },
+        (payload) => {
+          const p = payload.new as Patient
+          if (p.clinic_date === selectedDateRef.current) {
+            dispatch({ type: 'UPSERT_PATIENT', payload: p })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, []) // subscribe once on mount; selectedDate accessed via ref
 
   const setSelectedDate = useCallback((date: string) => {
     setSelectedDateRaw(date)
