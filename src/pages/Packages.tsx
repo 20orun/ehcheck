@@ -19,6 +19,7 @@ const TRACKER_LABELS: { key: keyof Package; label: string }[] = [
   { key: 'tracker_lunch', label: 'Lunch' },
   { key: 'tracker_consultation', label: 'Physician Consultation' },
   { key: 'tracker_dental', label: 'Dental' },
+  { key: 'tracker_gynecology', label: 'Gynecology' },
 ]
 
 const TRACKER_VALUE_OPTIONS = ['', 'X', 'M', 'B', '-']
@@ -51,6 +52,7 @@ function generateStepsFromTrackers(packageId: string, trackers: Record<string, s
   conditional('tracker_echo', 'Echocardiography', 'dept-echo', 'ECHO')
   conditional('tracker_tmt', 'TMT', 'dept-tmt', 'TMT')
   conditional('tracker_pft', 'PFT', 'dept-pulm', 'PFT')
+  conditional('tracker_gynecology', 'Gynecology Consultation', 'dept-gyn', 'GYNECOLOGY')
   always('Lunch', 'dept-lunch', 'LUNCH')
   always('Dietician Consultation', 'dept-diet', 'DIET')
   always('Physician Consultation', 'dept-phys', 'CONSULT')
@@ -120,6 +122,7 @@ function PackageFormModal({
       tracker_lunch: trackers.tracker_lunch,
       tracker_consultation: trackers.tracker_consultation,
       tracker_dental: trackers.tracker_dental,
+      tracker_gynecology: trackers.tracker_gynecology,
     }
 
     const steps = generateStepsFromTrackers(pkgId, trackers)

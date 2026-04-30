@@ -25,6 +25,7 @@ const GROUP_LABELS: Record<TaskGroup, string> = {
   PFT: 'PFT',
   LUNCH: 'Lunch',
   DIET: 'Dietician',
+  GYNECOLOGY: 'Gynecology',
   CONSULT: 'Physician Consultation',
   REVIEW: 'Final Review',
 }
