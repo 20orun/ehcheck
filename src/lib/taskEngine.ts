@@ -17,6 +17,7 @@ const DEPT_TO_GROUP: Record<string, TaskGroup> = {
   'dept-pulm': 'PFT',
   'dept-lunch': 'LUNCH',
   'dept-diet': 'DIET',
+  'dept-gyn': 'GYNECOLOGY',
   'dept-phys': 'CONSULT',
   'dept-rev': 'REVIEW',
 }
@@ -43,6 +44,7 @@ const GROUP_PRIORITY_WEIGHT: Record<TaskGroup, number> = {
   PFT: 5,
   LUNCH: 5,
   DIET: 6,
+  GYNECOLOGY: 7,
   CONSULT: 8,
   REVIEW: 9,
 }
@@ -64,7 +66,7 @@ export function isValidTransition(from: TaskStatus, to: TaskStatus): boolean {
 export function arePrerequisitesMet(task: PatientTask, allPatientTasks: PatientTask[]): boolean {
   if (task.task_group !== 'CONSULT' && task.task_group !== 'REVIEW') return true
 
-  const prereqGroups: TaskGroup[] = ['PHLEB', 'USG', 'PPBS', 'XRAY', 'MAMMO', 'BMD', 'ECG', 'ECHO', 'TMT', 'PFT']
+  const prereqGroups: TaskGroup[] = ['PHLEB', 'USG', 'PPBS', 'XRAY', 'MAMMO', 'BMD', 'ECG', 'ECHO', 'TMT', 'PFT', 'GYNECOLOGY']
   const mandatoryPrereqs = allPatientTasks.filter(
     (t) => prereqGroups.includes(t.task_group) && t.is_mandatory
   )

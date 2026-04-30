@@ -3,7 +3,7 @@ export type Priority = 'NORMAL' | 'VIP'
 
 export type TaskStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED'
 
-export type TaskGroup = 'BILLING' | 'CHECK_IN' | 'NURSING' | 'PHLEB' | 'USG' | 'BREAKFAST' | 'PPBS' | 'XRAY' | 'MAMMO' | 'BMD' | 'ECG' | 'ECHO' | 'TMT' | 'PFT' | 'LUNCH' | 'DIET' | 'CONSULT' | 'REVIEW'
+export type TaskGroup = 'BILLING' | 'CHECK_IN' | 'NURSING' | 'PHLEB' | 'USG' | 'BREAKFAST' | 'PPBS' | 'XRAY' | 'MAMMO' | 'BMD' | 'ECG' | 'ECHO' | 'TMT' | 'PFT' | 'LUNCH' | 'DIET' | 'GYNECOLOGY' | 'CONSULT' | 'REVIEW'
 
 // Legacy alias
 export type StepStatus = TaskStatus
@@ -34,6 +34,7 @@ export interface Package {
   tracker_lunch: string
   tracker_consultation: string
   tracker_dental: string
+  tracker_gynecology: string
 }
 
 export interface PackageStep {
