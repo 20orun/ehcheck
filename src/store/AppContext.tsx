@@ -56,6 +56,8 @@ import {
   updateCrossConsultationDb,
   deleteCrossConsultationDb,
   updateDeptOfflineStatus,
+  fetchDoctorStatuses,
+  updateDoctorOfflineStatus,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -67,6 +69,7 @@ interface AppState {
   packageSteps: PackageStep[]
   alertConfig: AlertConfig
   crossConsultations: CrossConsultation[]
+  doctorStatuses: Record<string, boolean>
 }
 
 type Action =
@@ -95,6 +98,8 @@ type Action =
   | { type: 'UPDATE_DEPT_OFFLINE'; payload: { deptId: string; isOffline: boolean } }
   | { type: 'UPSERT_PATIENT'; payload: Patient }
   | { type: 'UPSERT_TASK'; payload: PatientTask }
+  | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
+  | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -289,6 +294,13 @@ function reducer(state: AppState, action: Action): AppState {
           : [...state.patientTasks, action.payload],
       }
     }
+    case 'SET_DOCTOR_STATUSES':
+      return { ...state, doctorStatuses: action.payload }
+    case 'UPDATE_DOCTOR_OFFLINE':
+      return {
+        ...state,
+        doctorStatuses: { ...state.doctorStatuses, [action.payload.code]: action.payload.isOffline },
+      }
     default:
       return state
   }
@@ -343,6 +355,9 @@ interface AppContextType {
   // Department online/offline
   toggleDeptOffline: (deptId: string) => void
   isDeptOffline: (deptId: string) => boolean
+  // Doctor online/offline
+  toggleDoctorOffline: (code: string) => void
+  isDoctorOffline: (code: string) => boolean
   // Legacy aliases
   getPatientsWithSteps: () => PatientWithTasks[]
   startStep: (taskId: string) => void
@@ -362,6 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     packageSteps: [],
     alertConfig: DEFAULT_ALERT_CONFIG,
     crossConsultations: [],
+    doctorStatuses: {},
   })
 
   const [loading, setLoading] = useState(true)
@@ -399,6 +415,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const patientIds = data.patients.map((p) => p.id)
         fetchCrossConsultations(patientIds).then((ccs) => {
           if (!cancelled) dispatch({ type: 'SET_CROSS_CONSULTATIONS', payload: ccs })
+        }).catch(console.error)
+        fetchDoctorStatuses().then((statuses) => {
+          if (!cancelled) dispatch({ type: 'SET_DOCTOR_STATUSES', payload: statuses })
         }).catch(console.error)
       })
       .catch((err) => {
@@ -471,6 +490,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       )
+      // Doctor online/offline toggle from any device
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'doctor_status' },
+        (payload) => {
+          const d = payload.new as { code: string; is_offline: boolean }
+          dispatch({ type: 'UPDATE_DOCTOR_OFFLINE', payload: { code: d.code, isOffline: d.is_offline } })
+        }
+      )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -509,6 +537,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isDeptOffline = useCallback((deptId: string) => {
     return state.departments.find((d) => d.id === deptId)?.is_offline ?? false
   }, [state.departments])
+
+  const toggleDoctorOffline = useCallback((code: string) => {
+    const next = !state.doctorStatuses[code]
+    dispatch({ type: 'UPDATE_DOCTOR_OFFLINE', payload: { code, isOffline: next } })
+    updateDoctorOfflineStatus(code, next).catch((err) =>
+      console.warn('Failed to persist doctor offline status:', err)
+    )
+  }, [state.doctorStatuses])
+
+  const isDoctorOffline = useCallback((code: string) => {
+    return state.doctorStatuses[code] ?? false
+  }, [state.doctorStatuses])
 
   /** Guard: block mutations when viewing a past date */
   const getTodayStrNow = () => {
@@ -887,6 +927,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Block starting tasks for offline departments
     if (state.departments.find((d) => d.id === task.department_id)?.is_offline) return
 
+    // Block CONSULT/REVIEW tasks if the assigned doctor is offline
+    if (task.task_group === 'CONSULT' || task.task_group === 'REVIEW') {
+      const patient = state.patients.find((p) => p.id === task.patient_id)
+      if (patient?.assigned_doctor && state.doctorStatuses[patient.assigned_doctor]) return
+    }
+
     // Patient must be checked in before any task can start
     const patient = state.patients.find((p) => p.id === task.patient_id)
     if (!patient?.checked_in_at) return
@@ -911,7 +957,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dbUpdateTaskStatus(taskId, 'IN_PROGRESS', ts).catch((err) =>
       console.warn('Failed to persist task start:', err)
     )
-  }, [state.patientTasks, state.patients, state.departments, selectedDate])
+  }, [state.patientTasks, state.patients, state.departments, state.doctorStatuses, selectedDate])
 
   const completeTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
@@ -1208,6 +1254,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Department online/offline
         toggleDeptOffline,
         isDeptOffline,
+        // Doctor online/offline
+        toggleDoctorOffline,
+        isDoctorOffline,
         // Legacy aliases
         getPatientsWithSteps: getPatientsWithTasks,
         startStep: startTask,

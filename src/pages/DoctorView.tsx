@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { Search } from 'lucide-react'
+import { Search, Wifi, WifiOff, Play, CheckCircle2 } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { DOCTORS } from '@/types'
 import { getTaskGroupStatuses } from '@/lib/taskEngine'
@@ -9,7 +9,7 @@ import clsx from 'clsx'
 
 export default function DoctorView() {
   const { code } = useParams<{ code: string }>()
-  const { getPatientsWithTasks } = useApp()
+  const { getPatientsWithTasks, startTask, completeTask, isDoctorOffline, toggleDoctorOffline } = useApp()
   const doctor = DOCTORS.find((d) => d.code === code)
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -20,6 +20,8 @@ export default function DoctorView() {
   }, [getPatientsWithTasks, code])
 
   if (!doctor) return <EmptyState message="Doctor not found" />
+
+  const offline = isDoctorOffline(doctor.code)
 
   const filtered = patients.filter((p) => {
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase()) && !p.uhid.toLowerCase().includes(searchQuery.toLowerCase())) return false
@@ -42,17 +44,42 @@ export default function DoctorView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary-100 text-primary-700 font-bold text-lg">
-          {doctor.code}
-        </span>
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">{doctor.name}</h2>
-          <p className="text-sm text-gray-500">
-            {patients.length} patient{patients.length !== 1 ? 's' : ''} &bull; {completedCount} completed
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary-100 text-primary-700 font-bold text-lg">
+            {doctor.code}
+          </span>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{doctor.name}</h2>
+            <p className="text-sm text-gray-500">
+              {patients.length} patient{patients.length !== 1 ? 's' : ''} &bull; {completedCount} completed
+            </p>
+          </div>
         </div>
+
+        {/* Online/Offline toggle */}
+        <button
+          onClick={() => toggleDoctorOffline(doctor.code)}
+          className={clsx(
+            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
+            offline
+              ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+              : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+          )}
+        >
+          {offline ? <WifiOff className="w-4 h-4" /> : <Wifi className="w-4 h-4" />}
+          {offline ? 'Offline' : 'Online'}
+        </button>
       </div>
+
+      {/* Offline banner */}
+      {offline && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <span>{doctor.name} is currently offline. Tasks cannot be started.</span>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -101,17 +128,28 @@ export default function DoctorView() {
             const mandatoryDone = patient.tasks.filter((t) => t.is_mandatory).every((t) => t.status === 'COMPLETED')
             const activeGroups = groupStatuses.filter((g) => g.status === 'IN_PROGRESS')
 
+            // Find the relevant CONSULT/REVIEW task for this doctor
+            const doctorTask = patient.tasks.find(
+              (t) =>
+                (t.task_group === 'CONSULT' || t.task_group === 'REVIEW') &&
+                (t.status === 'NOT_STARTED' || t.status === 'IN_PROGRESS' || t.status === 'DELAYED')
+            )
+
             return (
-              <Link
+              <div
                 key={patient.id}
-                to={`/patient/${patient.id}`}
-                className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-primary-200 transition-all"
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-primary-200 transition-all"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900">{patient.name}</span>
+                        <Link
+                          to={`/patient/${patient.id}`}
+                          className="text-sm font-semibold text-gray-900 hover:text-primary-600"
+                        >
+                          {patient.name}
+                        </Link>
                         <PriorityBadge priority={patient.priority} />
                         {mandatoryDone && (
                           <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
@@ -124,7 +162,34 @@ export default function DoctorView() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-gray-500 shrink-0">{pct}%</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-medium text-gray-500">{pct}%</span>
+                    {doctorTask && doctorTask.status === 'NOT_STARTED' && (
+                      <button
+                        onClick={() => startTask(doctorTask.id)}
+                        disabled={offline}
+                        title={offline ? 'Doctor is offline' : 'Start consultation'}
+                        className={clsx(
+                          'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors',
+                          offline
+                            ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-primary-50 border-primary-200 text-primary-700 hover:bg-primary-100'
+                        )}
+                      >
+                        <Play className="w-3 h-3" />
+                        Start
+                      </button>
+                    )}
+                    {doctorTask && (doctorTask.status === 'IN_PROGRESS' || doctorTask.status === 'DELAYED') && (
+                      <button
+                        onClick={() => completeTask(doctorTask.id)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Complete
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
@@ -142,7 +207,7 @@ export default function DoctorView() {
                     </span>
                   </div>
                 )}
-              </Link>
+              </div>
             )
           })}
         </div>
@@ -150,3 +215,4 @@ export default function DoctorView() {
     </div>
   )
 }
+

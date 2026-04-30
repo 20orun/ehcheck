@@ -30,6 +30,19 @@ export async function updateDeptOfflineStatus(deptId: string, isOffline: boolean
   if (error) throw error
 }
 
+export async function fetchDoctorStatuses(): Promise<Record<string, boolean>> {
+  const { data, error } = await supabase.from('doctor_status').select('code, is_offline')
+  if (error) throw error
+  const result: Record<string, boolean> = {}
+  ;(data ?? []).forEach((r: { code: string; is_offline: boolean }) => { result[r.code] = r.is_offline })
+  return result
+}
+
+export async function updateDoctorOfflineStatus(code: string, isOffline: boolean): Promise<void> {
+  const { error } = await supabase.from('doctor_status').update({ is_offline: isOffline }).eq('code', code)
+  if (error) throw error
+}
+
 export async function fetchPackages(): Promise<Package[]> {
   const { data, error } = await supabase
     .from('packages')
