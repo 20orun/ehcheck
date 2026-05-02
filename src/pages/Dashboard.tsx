@@ -1,7 +1,7 @@
 import { useApp } from '@/store/AppContext'
 import { KPICard, PriorityBadge, PatientStatusDot } from '@/components/ui'
 import { Link } from 'react-router-dom'
-import { Clock, Search } from 'lucide-react'
+import { Clock, Search, Users } from 'lucide-react'
 import { useState } from 'react'
 import type { TaskStatus } from '@/types'
 const GROUP_LABELS: Record<string, string> = {
@@ -224,63 +224,84 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredPatients.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <PatientStatusDot status={getPatientTrackStatus(p)} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/patient/${p.id}`}
-                      className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
-                    >
-                      {p.name}
-                    </Link>
-                    {p.package_name && (
-                      <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-0.5 ${PACKAGE_BADGE[p.package_name] || 'bg-gray-100 text-gray-600'}`}>{p.package_name}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.uhid}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      {p.groupStatuses.map((gs) => (
-                        <span
-                          key={gs.group}
-                          className={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${STATUS_COLORS[gs.status]}`}
-                          title={`${GROUP_LABELS[gs.group]}: ${gs.completed}/${gs.total}`}
+              {(() => {
+                // Assign stable colors to each group_id
+                const GROUP_ROW_PALETTE = [
+                  { stripe: 'border-l-4 border-l-teal-400', bg: 'bg-teal-50/50', dot: 'text-teal-600' },
+                  { stripe: 'border-l-4 border-l-indigo-400', bg: 'bg-indigo-50/50', dot: 'text-indigo-600' },
+                  { stripe: 'border-l-4 border-l-orange-400', bg: 'bg-orange-50/50', dot: 'text-orange-600' },
+                  { stripe: 'border-l-4 border-l-purple-400', bg: 'bg-purple-50/50', dot: 'text-purple-600' },
+                  { stripe: 'border-l-4 border-l-cyan-400', bg: 'bg-cyan-50/50', dot: 'text-cyan-600' },
+                ]
+                const allGroupIds = [...new Set(filteredPatients.filter((p) => p.group_id).map((p) => p.group_id as string))]
+                const groupPaletteMap = Object.fromEntries(allGroupIds.map((gid, i) => [gid, GROUP_ROW_PALETTE[i % GROUP_ROW_PALETTE.length]]))
+
+                return filteredPatients.map((p) => {
+                  const palette = p.group_id ? groupPaletteMap[p.group_id] : null
+                  return (
+                    <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${palette ? `${palette.stripe} ${palette.bg}` : ''}`}>
+                      <td className="px-4 py-3">
+                        <PatientStatusDot status={getPatientTrackStatus(p)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          to={`/patient/${p.id}`}
+                          className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
                         >
-                          {GROUP_LABELS[gs.group]}
+                          {p.name}
+                        </Link>
+                        {p.group_id && (
+                          <span className={`inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-medium ${palette?.dot}`} title="Checked in as a group">
+                            <Users className="w-3 h-3" />
+                          </span>
+                        )}
+                        {p.package_name && (
+                          <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-0.5 ${PACKAGE_BADGE[p.package_name] || 'bg-gray-100 text-gray-600'}`}>{p.package_name}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.uhid}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1 flex-wrap">
+                          {p.groupStatuses.map((gs) => (
+                            <span
+                              key={gs.group}
+                              className={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${STATUS_COLORS[gs.status]}`}
+                              title={`${GROUP_LABELS[gs.group]}: ${gs.completed}/${gs.total}`}
+                            >
+                              {GROUP_LABELS[gs.group]}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 text-xs">
+                        {p.activeTasks.length > 0
+                          ? p.activeTasks.map((t) => t.step_name).join(', ')
+                          : !p.currentStep
+                            ? 'All Complete'
+                            : !p.checked_in_at
+                              ? 'Not Checked In'
+                              : 'Not Started'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`font-medium ${
+                            p.waitingMinutes > 30
+                              ? 'text-red-600'
+                              : p.waitingMinutes > 15
+                                ? 'text-amber-600'
+                                : 'text-gray-600'
+                          }`}
+                        >
+                          {waitInHours ? `${(p.waitingMinutes / 60).toFixed(1)} hr` : `${p.waitingMinutes} min`}
                         </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 text-xs">
-                    {p.activeTasks.length > 0
-                      ? p.activeTasks.map((t) => t.step_name).join(', ')
-                      : !p.currentStep
-                        ? 'All Complete'
-                        : !p.checked_in_at
-                          ? 'Not Checked In'
-                          : 'Not Started'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`font-medium ${
-                        p.waitingMinutes > 30
-                          ? 'text-red-600'
-                          : p.waitingMinutes > 15
-                            ? 'text-amber-600'
-                            : 'text-gray-600'
-                      }`}
-                    >
-                      {waitInHours ? `${(p.waitingMinutes / 60).toFixed(1)} hr` : `${p.waitingMinutes} min`}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <PriorityBadge priority={p.priority} />
-                  </td>
-                </tr>
-              ))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <PriorityBadge priority={p.priority} />
+                      </td>
+                    </tr>
+                  )
+                })
+              })()}
             </tbody>
           </table>
         </div>

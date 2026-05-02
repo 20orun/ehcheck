@@ -66,6 +66,7 @@ export interface Patient {
   created_at: string
   checked_in_at: string | null
   clinic_date: string // YYYY-MM-DD
+  group_id: string | null  // set when patients check in together
 }
 
 export interface PatientTask {

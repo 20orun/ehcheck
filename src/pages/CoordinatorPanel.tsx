@@ -12,6 +12,7 @@ import {
   LogOut,
   Search,
   Trash2,
+  Users,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
@@ -63,6 +64,7 @@ export default function CoordinatorPanel() {
     advancePatient,
     getNextTask,
     checkInPatient,
+    checkInGroup,
     undoCheckIn,
   } = useApp()
 
@@ -104,6 +106,16 @@ export default function CoordinatorPanel() {
     if (count === 0) return
     if (!confirm(`Are you sure you want to delete ${count} patient${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
     selectedIds.forEach((id) => deletePatient(id))
+    setSelectedIds(new Set())
+  }
+
+  function handleCheckInTogether() {
+    // Only check in patients who haven't been checked in yet
+    const toCheckIn = sortedPatients
+      .filter((p) => selectedIds.has(p.id) && !p.checked_in_at)
+      .map((p) => p.id)
+    if (toCheckIn.length < 2) return
+    checkInGroup(toCheckIn)
     setSelectedIds(new Set())
   }
 
@@ -227,10 +239,19 @@ export default function CoordinatorPanel() {
 
       {/* Bulk selection bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
-          <span className="text-sm font-medium text-red-800">
+        <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 flex-wrap">
+          <span className="text-sm font-medium text-gray-700">
             {selectedIds.size} patient{selectedIds.size !== 1 ? 's' : ''} selected
           </span>
+          {/* Check In Together – only when 2+ not-yet-checked-in patients are selected */}
+          {sortedPatients.filter((p) => selectedIds.has(p.id) && !p.checked_in_at).length >= 2 && (
+            <button
+              onClick={handleCheckInTogether}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+            >
+              <Users className="w-3.5 h-3.5" /> Check In Together
+            </button>
+          )}
           <button
             onClick={handleBulkDelete}
             className="inline-flex items-center gap-1.5 ml-auto px-4 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
@@ -239,7 +260,7 @@ export default function CoordinatorPanel() {
           </button>
           <button
             onClick={() => setSelectedIds(new Set())}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-300 text-red-700 hover:bg-red-100 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
           >
             Clear
           </button>
@@ -259,198 +280,186 @@ export default function CoordinatorPanel() {
             Select all ({sortedPatients.length})
           </label>
         )}
-        {sortedPatients.map((patient) => {
-          const activeTasks = patient.tasks.filter(
-            (t) => t.status === 'IN_PROGRESS' || t.status === 'DELAYED'
-          )
-          const available = getAvailableTasks(patient.tasks, !!patient.checked_in_at)
-          const allDone = isPatientComplete(patient.tasks)
-          const completedCount = patient.tasks.filter((s) => s.status === 'COMPLETED').length
-          const progressPct = Math.round((completedCount / patient.tasks.length) * 100)
-          const groupStatuses = getTaskGroupStatuses(patient.tasks)
-          const nextTask = getNextTask(patient.id)
-          const pkgColor = PACKAGE_COLORS[patient.package_name || ''] || DEFAULT_PKG_COLOR
 
-          return (
-            <div
-              key={patient.id}
-              className={`rounded-lg border ${pkgColor.border} ${pkgColor.bg} overflow-hidden`}
-            >
-              {/* Patient header */}
-              <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-100/60">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(patient.id)}
-                  onChange={() => toggleSelect(patient.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0"
-                />
-                <Link
-                  to={`/patient/${patient.id}`}
-                  className="font-semibold text-gray-900 hover:text-primary-600 transition-colors"
-                >
-                  {patient.name}
-                </Link>
-                {patient.package_name && (
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${pkgColor.badge}`}>{patient.package_name}</span>
-                )}
-                <PriorityBadge priority={patient.priority} />
-                <span className="text-xs text-gray-400 ml-auto">
-                  {completedCount}/{patient.tasks.length} tasks
-                </span>
+        {/* Build render units: solo patients or grouped patients */}
+        {(() => {
+          const GROUP_PALETTE = [
+            { border: 'border-teal-400', bg: 'bg-teal-50/40', label: 'text-teal-700', header: 'bg-teal-50' },
+            { border: 'border-indigo-400', bg: 'bg-indigo-50/40', label: 'text-indigo-700', header: 'bg-indigo-50' },
+            { border: 'border-orange-400', bg: 'bg-orange-50/40', label: 'text-orange-700', header: 'bg-orange-50' },
+            { border: 'border-purple-400', bg: 'bg-purple-50/40', label: 'text-purple-700', header: 'bg-purple-50' },
+            { border: 'border-cyan-400', bg: 'bg-cyan-50/40', label: 'text-cyan-700', header: 'bg-cyan-50' },
+          ]
 
-                {/* Progress mini-bar */}
-                <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary-500 rounded-full"
-                    style={{ width: `${progressPct}%` }}
+          // Assign a stable palette index to each group_id (based on order first seen)
+          const allGroupIds = [...new Set(sortedPatients.filter((p) => p.group_id).map((p) => p.group_id as string))]
+          const groupPaletteMap = Object.fromEntries(allGroupIds.map((gid, i) => [gid, GROUP_PALETTE[i % GROUP_PALETTE.length]]))
+
+          // Build ordered render units
+          type RenderUnit = { type: 'solo'; patient: typeof sortedPatients[0] } | { type: 'group'; groupId: string; patients: typeof sortedPatients }
+          const units: RenderUnit[] = []
+          const seenGroups = new Set<string>()
+          sortedPatients.forEach((p) => {
+            if (!p.group_id) {
+              units.push({ type: 'solo', patient: p })
+            } else if (!seenGroups.has(p.group_id)) {
+              seenGroups.add(p.group_id)
+              units.push({ type: 'group', groupId: p.group_id, patients: sortedPatients.filter((sp) => sp.group_id === p.group_id) })
+            }
+          })
+
+          const renderCard = (patient: typeof sortedPatients[0]) => {
+            const activeTasks = patient.tasks.filter((t) => t.status === 'IN_PROGRESS' || t.status === 'DELAYED')
+            const available = getAvailableTasks(patient.tasks, !!patient.checked_in_at)
+            const allDone = isPatientComplete(patient.tasks)
+            const completedCount = patient.tasks.filter((s) => s.status === 'COMPLETED').length
+            const progressPct = Math.round((completedCount / patient.tasks.length) * 100)
+            const groupStatuses = getTaskGroupStatuses(patient.tasks)
+            const nextTask = getNextTask(patient.id)
+            const pkgColor = PACKAGE_COLORS[patient.package_name || ''] || DEFAULT_PKG_COLOR
+
+            return (
+              <div key={patient.id} className={`rounded-lg border ${pkgColor.border} ${pkgColor.bg} overflow-hidden`}>
+                {/* Patient header */}
+                <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-100/60">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(patient.id)}
+                    onChange={() => toggleSelect(patient.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0"
                   />
+                  <Link to={`/patient/${patient.id}`} className="font-semibold text-gray-900 hover:text-primary-600 transition-colors">
+                    {patient.name}
+                  </Link>
+                  {patient.package_name && (
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${pkgColor.badge}`}>{patient.package_name}</span>
+                  )}
+                  <PriorityBadge priority={patient.priority} />
+                  <span className="text-xs text-gray-400 ml-auto">{completedCount}/{patient.tasks.length} tasks</span>
+                  <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${progressPct}%` }} />
+                  </div>
                 </div>
-              </div>
 
-              {/* Active tasks & next task suggestion */}
-              <div className="px-4 py-3 space-y-2">
-                {!patient.checked_in_at ? (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-500">Not checked in yet</span>
-                    <button
-                      onClick={() => checkInPatient(patient.id)}
-                      className="inline-flex items-center gap-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors ml-auto"
-                    >
-                      <LogIn className="w-3.5 h-3.5" /> Check In
-                    </button>
-                  </div>
-                ) : allDone ? (
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> All tasks completed
-                    </p>
-                    <button
-                      onClick={() => undoCheckIn(patient.id)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors ml-auto"
-                    >
-                      <LogOut className="w-3.5 h-3.5" /> Reset
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Active tasks */}
-                    {activeTasks.length > 0 && (
-                      <div className="space-y-1.5">
-                        {activeTasks.map((task) => (
-                          <div key={task.id} className="flex items-center gap-3 flex-wrap">
-                            <span className="text-sm text-gray-700">
-                              Active: <strong>{task.step_name}</strong>
-                            </span>
-                            <StatusBadge status={task.status} />
-                            <div className="flex items-center gap-1 ml-auto">
-                              <button
-                                onClick={() => completeTask(task.id)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Complete
-                              </button>
-                              <button
-                                onClick={() => skipTask(task.id)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                              >
-                                <SkipForward className="w-3.5 h-3.5" /> Skip
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Next best task suggestion */}
-                    {nextTask && (
-                      <div className="flex items-center gap-3 flex-wrap bg-primary-50 rounded-lg px-3 py-2">
-                        <Zap className="w-4 h-4 text-primary-600" />
-                        <span className="text-sm text-primary-800">
-                          Suggested: <strong>{nextTask.step_name}</strong>
-                        </span>
-                        <div className="flex items-center gap-1 ml-auto">
-                          <button
-                            onClick={() => startTask(nextTask.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-                          >
-                            <Play className="w-3.5 h-3.5" /> Start
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Available tasks to start */}
-                    {available.filter((t) => t.id !== nextTask?.id).length > 0 && (
-                      <div className="text-xs text-gray-500">
-                        Other available:{' '}
-                        {available
-                          .filter((t) => t.id !== nextTask?.id)
-                          .map((t) => t.step_name)
-                          .join(', ')}
-                      </div>
-                    )}
-
-                    {/* Advance button */}
-                    <div className="flex items-center gap-1 pt-1">
+                {/* Active tasks & next task suggestion */}
+                <div className="px-4 py-3 space-y-2">
+                  {!patient.checked_in_at ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-gray-500">Not checked in yet</span>
                       <button
-                        onClick={() => advancePatient(patient.id)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors"
+                        onClick={() => checkInPatient(patient.id)}
+                        className="inline-flex items-center gap-1 px-4 py-1.5 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors ml-auto"
                       >
-                        <ChevronRight className="w-3.5 h-3.5" /> Advance
-                      </button>
-
-                      {patient.priority === 'NORMAL' && (
-                        <button
-                          onClick={() => setPriority(patient.id, 'VIP')}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
-                        >
-                          <Crown className="w-3.5 h-3.5" /> VIP
-                        </button>
-                      )}
-                      {patient.priority === 'VIP' && (
-                        <button
-                          onClick={() => setPriority(patient.id, 'NORMAL')}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                        >
-                          <Star className="w-3.5 h-3.5" /> Normal
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => undoCheckIn(patient.id)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                      >
-                        <LogOut className="w-3.5 h-3.5" /> Undo Check In
+                        <LogIn className="w-3.5 h-3.5" /> Check In
                       </button>
                     </div>
-                  </>
-                )}
-              </div>
+                  ) : allDone ? (
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" /> All tasks completed
+                      </p>
+                      <button
+                        onClick={() => undoCheckIn(patient.id)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors ml-auto"
+                      >
+                        <LogOut className="w-3.5 h-3.5" /> Reset
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {activeTasks.length > 0 && (
+                        <div className="space-y-1.5">
+                          {activeTasks.map((task) => (
+                            <div key={task.id} className="flex items-center gap-3 flex-wrap">
+                              <span className="text-sm text-gray-700">Active: <strong>{task.step_name}</strong></span>
+                              <StatusBadge status={task.status} />
+                              <div className="flex items-center gap-1 ml-auto">
+                                <button onClick={() => completeTask(task.id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Complete
+                                </button>
+                                <button onClick={() => skipTask(task.id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                                  <SkipForward className="w-3.5 h-3.5" /> Skip
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {nextTask && (
+                        <div className="flex items-center gap-3 flex-wrap bg-primary-50 rounded-lg px-3 py-2">
+                          <Zap className="w-4 h-4 text-primary-600" />
+                          <span className="text-sm text-primary-800">Suggested: <strong>{nextTask.step_name}</strong></span>
+                          <div className="flex items-center gap-1 ml-auto">
+                            <button onClick={() => startTask(nextTask.id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
+                              <Play className="w-3.5 h-3.5" /> Start
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {available.filter((t) => t.id !== nextTask?.id).length > 0 && (
+                        <div className="text-xs text-gray-500">
+                          Other available:{' '}
+                          {available.filter((t) => t.id !== nextTask?.id).map((t) => t.step_name).join(', ')}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 pt-1">
+                        <button onClick={() => advancePatient(patient.id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors">
+                          <ChevronRight className="w-3.5 h-3.5" /> Advance
+                        </button>
+                        {patient.priority === 'NORMAL' && (
+                          <button onClick={() => setPriority(patient.id, 'VIP')} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+                            <Crown className="w-3.5 h-3.5" /> VIP
+                          </button>
+                        )}
+                        {patient.priority === 'VIP' && (
+                          <button onClick={() => setPriority(patient.id, 'NORMAL')} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                            <Star className="w-3.5 h-3.5" /> Normal
+                          </button>
+                        )}
+                        <button onClick={() => undoCheckIn(patient.id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
+                          <LogOut className="w-3.5 h-3.5" /> Undo Check In
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
 
-              {/* Group status pills row */}
-              <div className="px-4 pb-3 flex gap-1.5 flex-wrap">
-                {groupStatuses.map((gs) => (
-                  <span
-                    key={gs.group}
-                    className={`inline-block px-2 py-0.5 text-[10px] font-medium rounded-full ${
-                      gs.status === 'COMPLETED'
-                        ? 'bg-green-100 text-green-700'
-                        : gs.status === 'IN_PROGRESS'
-                          ? 'bg-blue-100 text-blue-700'
-                          : gs.status === 'DELAYED'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-gray-100 text-gray-500'
-                    }`}
-                    title={`${GROUP_LABELS[gs.group]}: ${gs.completed}/${gs.total}`}
-                  >
-                    {GROUP_LABELS[gs.group]} {gs.completed}/{gs.total}
-                  </span>
-                ))}
+                {/* Group status pills row */}
+                <div className="px-4 pb-3 flex gap-1.5 flex-wrap">
+                  {groupStatuses.map((gs) => (
+                    <span
+                      key={gs.group}
+                      className={`inline-block px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                        gs.status === 'COMPLETED' ? 'bg-green-100 text-green-700'
+                          : gs.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700'
+                          : gs.status === 'DELAYED' ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                      title={`${GROUP_LABELS[gs.group]}: ${gs.completed}/${gs.total}`}
+                    >
+                      {GROUP_LABELS[gs.group]} {gs.completed}/{gs.total}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          }
+
+          return units.map((unit) => {
+            if (unit.type === 'solo') return renderCard(unit.patient)
+            const palette = groupPaletteMap[unit.groupId]
+            return (
+              <div key={`group-${unit.groupId}`} className={`rounded-xl border-2 ${palette.border} ${palette.bg} p-2 space-y-2`}>
+                <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${palette.header}`}>
+                  <Users className={`w-4 h-4 ${palette.label}`} />
+                  <span className={`text-xs font-semibold ${palette.label}`}>Checked In Together · {unit.patients.length} patients</span>
+                </div>
+                {unit.patients.map((p) => renderCard(p))}
+              </div>
+            )
+          })
+        })()}
       </div>
     </div>
   )

@@ -85,7 +85,7 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
   let query = supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, created_at, checked_in_at, clinic_date')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, created_at, checked_in_at, clinic_date, group_id')
     .order('created_at')
   if (clinicDate) {
     query = query.eq('clinic_date', clinicDate)
@@ -103,6 +103,7 @@ export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
     created_at: p.created_at,
     checked_in_at: p.checked_in_at ?? null,
     clinic_date: p.clinic_date,
+    group_id: p.group_id ?? null,
   }))
 }
 
@@ -183,6 +184,7 @@ export async function insertPatient(patient: Patient): Promise<void> {
     created_at: patient.created_at,
     checked_in_at: patient.checked_in_at,
     clinic_date: patient.clinic_date,
+    group_id: patient.group_id ?? null,
   })
   if (error) throw error
 }
@@ -240,8 +242,10 @@ export async function updatePatientPriority(patientId: string, priority: Priorit
   if (error) throw error
 }
 
-export async function checkInPatientDb(patientId: string, timestamp: string): Promise<void> {
-  const { error } = await supabase.from('patients').update({ checked_in_at: timestamp }).eq('id', patientId)
+export async function checkInPatientDb(patientId: string, timestamp: string, groupId?: string): Promise<void> {
+  const update: Record<string, unknown> = { checked_in_at: timestamp }
+  if (groupId) update.group_id = groupId
+  const { error } = await supabase.from('patients').update(update).eq('id', patientId)
   if (error) throw error
 }
 
