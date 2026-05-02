@@ -59,6 +59,7 @@ export interface Patient {
   id: string
   name: string
   uhid: string
+  phone: string | null
   package_id: string | null
   assigned_doctor: DoctorCode
   priority: Priority

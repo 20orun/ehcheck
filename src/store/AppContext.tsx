@@ -58,6 +58,7 @@ import {
   updateDeptOfflineStatus,
   fetchDoctorStatuses,
   updateDoctorOfflineStatus,
+  updatePatientInfoDb,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -98,6 +99,7 @@ type Action =
   | { type: 'UPDATE_DEPT_OFFLINE'; payload: { deptId: string; isOffline: boolean } }
   | { type: 'UPSERT_PATIENT'; payload: Patient }
   | { type: 'UPSERT_TASK'; payload: PatientTask }
+  | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
 
@@ -276,6 +278,15 @@ function reducer(state: AppState, action: Action): AppState {
           d.id === action.payload.deptId ? { ...d, is_offline: action.payload.isOffline } : d
         ),
       }
+    case 'UPDATE_PATIENT_INFO':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId
+            ? { ...p, name: action.payload.name, uhid: action.payload.uhid, phone: action.payload.phone }
+            : p
+        ),
+      }
     case 'UPSERT_PATIENT': {
       const exists = state.patients.some((p) => p.id === action.payload.id)
       return {
@@ -326,7 +337,8 @@ interface AppContextType {
   getDepartmentStats: (departmentId: string) => { waiting: number; remaining: number; active: number; avgTime: number }
   getNextTask: (patientId: string) => PatientTask | null
   // Actions
-  registerPatient: (name: string, uhid: string, packageId: string | null, priority: Priority) => void
+  registerPatient: (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => void
+  updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   startTask: (taskId: string) => void
   completeTask: (taskId: string) => void
   skipTask: (taskId: string) => void
@@ -352,6 +364,7 @@ interface AppContextType {
   updateCrossConsultationStatus: (id: string, status: CrossConsultationStatus) => void
   editCrossConsultation: (id: string, departmentName: string, doctorName: string, notes: string) => void
   deleteCrossConsultation: (id: string) => void
+  updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   // Department online/offline
   toggleDeptOffline: (deptId: string) => void
   isDeptOffline: (deptId: string) => boolean
@@ -859,7 +872,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ─── Actions ───────────────────────────────────────
 
   const registerPatient = useCallback(
-    (name: string, uhid: string, packageId: string | null, priority: Priority) => {
+    (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => {
       if (selectedDate < getTodayStrNow()) return // read-only on past dates
       const patientId = `pat-${crypto.randomUUID()}`
       const clinicDateStr = selectedDate
@@ -867,6 +880,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: patientId,
         name,
         uhid,
+        phone: phone || null,
         package_id: packageId,
         assigned_doctor: null,
         priority,
@@ -1206,6 +1220,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const updatePatientInfo = useCallback(
+    (patientId: string, name: string, uhid: string, phone: string | null) => {
+      dispatch({ type: 'UPDATE_PATIENT_INFO', payload: { patientId, name, uhid, phone } })
+      updatePatientInfoDb(patientId, { name, uhid, phone }).catch((err) =>
+        console.warn('Failed to persist patient info update:', err)
+      )
+    },
+    []
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -1251,6 +1275,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateCrossConsultationStatus,
         editCrossConsultation,
         deleteCrossConsultation,
+        updatePatientInfo,
         // Department online/offline
         toggleDeptOffline,
         isDeptOffline,

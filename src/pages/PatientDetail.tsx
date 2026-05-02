@@ -84,7 +84,7 @@ function useElapsedTimer(checkedInAt: string | null, completedAt: string | null)
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation, updatePatientInfo } = useApp()
   const patient = getPatientById(id!)
 
   // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
@@ -108,6 +108,10 @@ export default function PatientDetail() {
   const [editEndTime, setEditEndTime] = useState('')
   const [editingDoctor, setEditingDoctor] = useState(false)
   const [editingPackage, setEditingPackage] = useState(false)
+  const [editingPatientInfo, setEditingPatientInfo] = useState(false)
+  const [editNameInput, setEditNameInput] = useState('')
+  const [editUhidInput, setEditUhidInput] = useState('')
+  const [editPhoneInput, setEditPhoneInput] = useState('')
 
   // Cross consultation state
   const [showAddCC, setShowAddCC] = useState(false)
@@ -176,16 +180,82 @@ export default function PatientDetail() {
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-gray-900">{patient.name}</h2>
-            <PriorityBadge priority={patient.priority} />
-            {allComplete && (
-              <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                Complete
-              </span>
+            {editingPatientInfo ? (
+              <div className="flex flex-col gap-2 w-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    value={editNameInput}
+                    onChange={(e) => setEditNameInput(e.target.value)}
+                    placeholder="Patient name"
+                    className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500 w-48"
+                    autoFocus
+                  />
+                  <input
+                    type="text"
+                    value={editUhidInput}
+                    onChange={(e) => setEditUhidInput(e.target.value)}
+                    placeholder="UHID (optional)"
+                    className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500 w-36"
+                  />
+                  <input
+                    type="tel"
+                    value={editPhoneInput}
+                    onChange={(e) => setEditPhoneInput(e.target.value)}
+                    placeholder="Phone (optional)"
+                    className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500 w-36"
+                  />
+                  <button
+                    onClick={() => {
+                      if (editNameInput.trim()) {
+                        updatePatientInfo(patient.id, editNameInput.trim(), editUhidInput.trim(), editPhoneInput.trim() || null)
+                      }
+                      setEditingPatientInfo(false)
+                    }}
+                    className="inline-flex items-center p-0.5 text-green-600 hover:text-green-800 transition-colors"
+                    title="Save"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setEditingPatientInfo(false)}
+                    className="inline-flex items-center p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Cancel"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold text-gray-900">{patient.name}</h2>
+                <button
+                  onClick={() => {
+                    setEditNameInput(patient.name)
+                    setEditUhidInput(patient.uhid || '')
+                    setEditPhoneInput(patient.phone || '')
+                    setEditingPatientInfo(true)
+                  }}
+                  className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"
+                  title="Edit name / UHID / phone"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <PriorityBadge priority={patient.priority} />
+                {allComplete && (
+                  <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                    Complete
+                  </span>
+                )}
+              </>
             )}
           </div>
           <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1">
-            <span>UHID: {patient.uhid} &bull; {patient.package_name || <span className="italic text-gray-400">No package selected</span>}</span>
+            <span>
+              {patient.uhid ? <>UHID: {patient.uhid} &bull; </> : null}
+              {patient.phone ? <><span className="text-gray-400">📞</span> {patient.phone} &bull; </> : null}
+              {patient.package_name || <span className="italic text-gray-400">No package selected</span>}
+            </span>
             <button
               onClick={() => { setEditingPackage(true); setBillingPkgSearch('') }}
               className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"

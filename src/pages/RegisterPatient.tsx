@@ -6,6 +6,7 @@ import type { Priority } from '@/types'
 interface CsvRow {
   name: string
   uhid: string
+  phone: string
   package: string
   priority: Priority
 }
@@ -21,12 +22,12 @@ function parseCsv(
   const header = lines[0].split(',').map((h) => h.trim().toLowerCase())
   const nameIdx = header.indexOf('name')
   const uhidIdx = header.indexOf('uhid')
+  const phoneIdx = header.indexOf('phone')
   const pkgIdx = header.indexOf('package')
   const prioIdx = header.indexOf('priority')
 
   const missing: string[] = []
   if (nameIdx === -1) missing.push('name')
-  if (uhidIdx === -1) missing.push('uhid')
   if (missing.length) return { rows: [], errors: [`Missing required columns: ${missing.join(', ')}`] }
 
   const rows: CsvRow[] = []
@@ -35,12 +36,13 @@ function parseCsv(
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map((c) => c.trim())
     const rowName = cols[nameIdx] || ''
-    const rowUhid = cols[uhidIdx] || ''
+    const rowUhid = uhidIdx !== -1 ? (cols[uhidIdx] || '') : ''
+    const rowPhone = phoneIdx !== -1 ? (cols[phoneIdx] || '') : ''
     const rawPkg = pkgIdx !== -1 ? (cols[pkgIdx] || '') : ''
     const rawPrio = prioIdx !== -1 ? (cols[prioIdx] || '').toUpperCase() : 'NORMAL'
 
-    if (!rowName || !rowUhid) {
-      errors.push(`Row ${i + 1}: name and uhid are required.`)
+    if (!rowName) {
+      errors.push(`Row ${i + 1}: name is required.`)
       continue
     }
 
@@ -60,7 +62,7 @@ function parseCsv(
     }
 
     const priority: Priority = rawPrio === 'VIP' ? 'VIP' : 'NORMAL'
-    rows.push({ name: rowName, uhid: rowUhid, package: resolvedPkg, priority })
+    rows.push({ name: rowName, uhid: rowUhid, phone: rowPhone, package: resolvedPkg, priority })
   }
 
   return { rows, errors }
@@ -72,6 +74,7 @@ export default function RegisterPatient() {
 
   const [name, setName] = useState('')
   const [uhid, setUhid] = useState('')
+  const [phone, setPhone] = useState('')
   const [packageId, setPackageId] = useState<string | null>(null)
   const [pkgSearch, setPkgSearch] = useState('')
   const [pkgDropdownOpen, setPkgDropdownOpen] = useState(false)
@@ -102,8 +105,8 @@ export default function RegisterPatient() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !uhid.trim()) return
-    registerPatient(name.trim(), uhid.trim(), packageId, priority)
+    if (!name.trim()) return
+    registerPatient(name.trim(), uhid.trim(), phone.trim() || null, packageId, priority)
     navigate('/')
   }
 
@@ -128,7 +131,7 @@ export default function RegisterPatient() {
     let count = 0
     for (const row of csvRows) {
       const pkgId = row.package || null
-      registerPatient(row.name, row.uhid, pkgId, row.priority)
+      registerPatient(row.name, row.uhid, row.phone || null, pkgId, row.priority)
       count++
     }
     setImportResult(`Successfully registered ${count} patient${count !== 1 ? 's' : ''}.`)
@@ -159,11 +162,12 @@ export default function RegisterPatient() {
       const cols = lines[i].split('\t').map((c) => c.trim())
       const rowName = cols[0] || ''
       const rowUhid = cols[1] || ''
-      if (!rowName || !rowUhid) {
-        errors.push(`Row ${i + 1}: both name and UHID are required.`)
+      const rowPhone = cols[2] || ''
+      if (!rowName) {
+        errors.push(`Row ${i + 1}: name is required.`)
         continue
       }
-      rows.push({ name: rowName, uhid: rowUhid, package: '', priority: 'NORMAL' })
+      rows.push({ name: rowName, uhid: rowUhid, phone: rowPhone, package: '', priority: 'NORMAL' })
     }
     setPasteRows(rows)
     setPasteErrors(errors)
@@ -172,7 +176,7 @@ export default function RegisterPatient() {
   function handlePasteImport() {
     let count = 0
     for (const row of pasteRows) {
-      registerPatient(row.name, row.uhid, null, row.priority)
+      registerPatient(row.name, row.uhid, row.phone || null, null, row.priority)
       count++
     }
     setPasteResult(`Successfully registered ${count} patient${count !== 1 ? 's' : ''}.`)
@@ -209,7 +213,7 @@ export default function RegisterPatient() {
 
         <div>
           <label htmlFor="uhid" className="block text-sm font-medium text-gray-700 mb-1">
-            UHID
+            UHID <span className="text-gray-400 font-normal">(optional)</span>
           </label>
           <input
             id="uhid"
@@ -218,7 +222,20 @@ export default function RegisterPatient() {
             onChange={(e) => setUhid(e.target.value)}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             placeholder="Enter UHID"
-            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+            Phone <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            placeholder="Enter phone number"
           />
         </div>
 
@@ -298,9 +315,33 @@ export default function RegisterPatient() {
 
       {/* CSV Bulk Import */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-800">Bulk Import from CSV</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-800">Bulk Import from CSV</h3>
+          <button
+            type="button"
+            onClick={() => {
+              const samplePackage = state.packages[0]?.name ?? 'Silver Health Check'
+              const csv = [
+                'name,uhid,phone,package,priority',
+                `John Doe,UH001,9876543210,${samplePackage},NORMAL`,
+                `Jane Smith,UH002,9123456780,,VIP`,
+                `Alex Kumar,,,, NORMAL`,
+              ].join('\n')
+              const blob = new Blob([csv], { type: 'text/csv' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'sample-patients.csv'
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            className="text-xs text-primary-600 hover:text-primary-800 font-medium underline underline-offset-2"
+          >
+            Download sample CSV
+          </button>
+        </div>
         <p className="text-xs text-gray-500">
-          Upload a <code>.csv</code> file with columns: <strong>name</strong>, <strong>uhid</strong> (required), <strong>package</strong>, <strong>priority</strong> (optional).
+          Upload a <code>.csv</code> file with columns: <strong>name</strong> (required), <strong>uhid</strong>, <strong>phone</strong>, <strong>package</strong>, <strong>priority</strong> (all optional).
         </p>
 
         <input
@@ -335,6 +376,7 @@ export default function RegisterPatient() {
                       <th className="text-left px-3 py-2 font-medium text-gray-600">#</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">Name</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">UHID</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">Package</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">Priority</th>
                     </tr>
@@ -344,7 +386,8 @@ export default function RegisterPatient() {
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-3 py-1.5 text-gray-400">{i + 1}</td>
                         <td className="px-3 py-1.5">{row.name}</td>
-                        <td className="px-3 py-1.5 font-mono">{row.uhid}</td>
+                        <td className="px-3 py-1.5 font-mono">{row.uhid || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-3 py-1.5 font-mono">{row.phone || <span className="text-gray-300">—</span>}</td>
                         <td className="px-3 py-1.5">
                           {state.packages.find((p) => p.id === row.package)?.name || '—'}
                         </td>
@@ -386,7 +429,7 @@ export default function RegisterPatient() {
       <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
         <h3 className="text-sm font-semibold text-gray-800">Paste from Excel</h3>
         <p className="text-xs text-gray-500">
-          Copy rows from Excel (columns: <strong>Name</strong>, <strong>UHID</strong> — no header) and paste below.
+          Copy rows from Excel (columns: <strong>Name</strong>, <strong>UHID</strong>, <strong>Phone</strong> — no header needed, phone is optional) and paste below.
         </p>
 
         <textarea
@@ -399,7 +442,7 @@ export default function RegisterPatient() {
           }}
           rows={5}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          placeholder={"John Doe\t12345\nJane Smith\t67890"}
+          placeholder={"John Doe\t12345\t9876543210\nJane Smith\t67890\t"}
         />
 
         {pasteErrors.length > 0 && (
@@ -426,6 +469,7 @@ export default function RegisterPatient() {
                       <th className="text-left px-3 py-2 font-medium text-gray-600">#</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">Name</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">UHID</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -433,7 +477,8 @@ export default function RegisterPatient() {
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-3 py-1.5 text-gray-400">{i + 1}</td>
                         <td className="px-3 py-1.5">{row.name}</td>
-                        <td className="px-3 py-1.5 font-mono">{row.uhid}</td>
+                        <td className="px-3 py-1.5 font-mono">{row.uhid || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-3 py-1.5 font-mono">{row.phone || <span className="text-gray-300">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -85,7 +85,7 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
   let query = supabase
     .from('patients')
-    .select('id, name, uhid, package_id, assigned_doctor, priority, created_at, checked_in_at, clinic_date')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, created_at, checked_in_at, clinic_date')
     .order('created_at')
   if (clinicDate) {
     query = query.eq('clinic_date', clinicDate)
@@ -96,6 +96,7 @@ export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
     id: p.id,
     name: p.name,
     uhid: p.uhid,
+    phone: p.phone ?? null,
     package_id: p.package_id,
     assigned_doctor: (p.assigned_doctor as DoctorCode) ?? null,
     priority: p.priority as Priority,
@@ -175,6 +176,7 @@ export async function insertPatient(patient: Patient): Promise<void> {
     id: patient.id,
     name: patient.name,
     uhid: patient.uhid,
+    phone: patient.phone ?? null,
     package_id: patient.package_id,
     assigned_doctor: patient.assigned_doctor,
     priority: patient.priority,
@@ -182,6 +184,14 @@ export async function insertPatient(patient: Patient): Promise<void> {
     checked_in_at: patient.checked_in_at,
     clinic_date: patient.clinic_date,
   })
+  if (error) throw error
+}
+
+export async function updatePatientInfoDb(
+  patientId: string,
+  fields: { name?: string; uhid?: string; phone?: string | null }
+): Promise<void> {
+  const { error } = await supabase.from('patients').update(fields).eq('id', patientId)
   if (error) throw error
 }
 
