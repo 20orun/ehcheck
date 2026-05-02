@@ -1,3 +1,32 @@
+// ─── Roles ───────────────────────────────────────────
+// Stored in user_roles.role column as plain strings.
+// Examples: 'admin', 'coordinator', 'department:dept-lab', 'doctor:S'
+export type AppRole = string
+
+export function parseRole(role: AppRole | null): {
+  isAdmin: boolean
+  isCoordinator: boolean
+  isDepartment: boolean
+  isDoctor: boolean
+  departmentId: string | null
+  doctorCode: string | null
+} {
+  if (!role) {
+    return { isAdmin: false, isCoordinator: false, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
+  }
+  if (role === 'admin') return { isAdmin: true, isCoordinator: false, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
+  if (role === 'coordinator') return { isAdmin: false, isCoordinator: true, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
+  if (role.startsWith('department:')) {
+    const departmentId = role.slice('department:'.length)
+    return { isAdmin: false, isCoordinator: false, isDepartment: true, isDoctor: false, departmentId, doctorCode: null }
+  }
+  if (role.startsWith('doctor:')) {
+    const doctorCode = role.slice('doctor:'.length)
+    return { isAdmin: false, isCoordinator: false, isDepartment: false, isDoctor: true, departmentId: null, doctorCode }
+  }
+  return { isAdmin: false, isCoordinator: false, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
+}
+
 // ─── Enums ───────────────────────────────────────────
 export type Priority = 'NORMAL' | 'VIP'
 

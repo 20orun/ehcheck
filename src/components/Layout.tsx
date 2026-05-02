@@ -26,17 +26,17 @@ import { useAuth } from '@/store/AuthContext'
 import { DOCTORS } from '@/types'
 import clsx from 'clsx'
 
-const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/departments', icon: Building2, label: 'Departments' },
-  { to: '/coordinator', icon: Sliders, label: 'Coordinator' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/tracker', icon: ClipboardList, label: 'Tracker' },
-  { to: '/register', icon: UserPlus, label: 'Register' },
-  { to: '/packages', icon: PackageIcon, label: 'Packages' },
-  { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
-  { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report' },
-  { to: '/cross-consultations', icon: BookOpen, label: 'Cross Consults' },
+const ALL_NAV_ITEMS = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, hideForCoordinator: false },
+  { to: '/departments', icon: Building2, label: 'Departments', adminOnly: false, hideForCoordinator: false },
+  { to: '/coordinator', icon: Sliders, label: 'Coordinator', adminOnly: false, hideForCoordinator: false },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics', adminOnly: false, hideForCoordinator: true },
+  { to: '/tracker', icon: ClipboardList, label: 'Tracker', adminOnly: false, hideForCoordinator: false },
+  { to: '/register', icon: UserPlus, label: 'Register', adminOnly: false, hideForCoordinator: false },
+  { to: '/packages', icon: PackageIcon, label: 'Packages', adminOnly: false, hideForCoordinator: false },
+  { to: '/calendar', icon: CalendarDays, label: 'Calendar', adminOnly: false, hideForCoordinator: false },
+  { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report', adminOnly: false, hideForCoordinator: false },
+  { to: '/cross-consultations', icon: BookOpen, label: 'Cross Consults', adminOnly: false, hideForCoordinator: false },
 ]
 
 export default function Layout() {
@@ -45,8 +45,26 @@ export default function Layout() {
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
   const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
-  const { user, signOut } = useAuth()
+  const { user, signOut, isAdmin, isCoordinator, isDepartment, isDoctor, departmentId, doctorCode, role } = useAuth()
   const location = useLocation()
+
+  // Build the visible nav items based on the current role
+  const navItems = (isAdmin || isCoordinator)
+    ? ALL_NAV_ITEMS.filter((item) => !(isCoordinator && item.hideForCoordinator))
+    : []
+
+  // For department/doctor roles only show their specific entry in the sidebar sections
+  const visibleDepartments = (isAdmin || isCoordinator)
+    ? state.departments
+    : isDepartment && departmentId
+      ? state.departments.filter((d) => d.id === departmentId)
+      : []
+
+  const visibleDoctors = (isAdmin || isCoordinator)
+    ? DOCTORS
+    : isDoctor && doctorCode
+      ? DOCTORS.filter((d) => d.code === doctorCode)
+      : []
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -101,7 +119,7 @@ export default function Layout() {
         </div>
 
         <nav className="px-3 py-4 space-y-1 flex-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -123,15 +141,15 @@ export default function Layout() {
             </NavLink>
           ))}
 
-          {!collapsed && (
+          {visibleDepartments.length > 0 && !collapsed && (
             <div className="pt-4 pb-2 px-3">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Departments
               </p>
             </div>
           )}
-          {collapsed && <div className="pt-4" />}
-          {state.departments.map((dept) => (
+          {visibleDepartments.length > 0 && collapsed && <div className="pt-4" />}
+          {visibleDepartments.map((dept) => (
             <NavLink
               key={dept.id}
               to={`/department/${dept.id}`}
@@ -152,15 +170,15 @@ export default function Layout() {
             </NavLink>
           ))}
 
-          {!collapsed && (
+          {visibleDoctors.length > 0 && !collapsed && (
             <div className="pt-4 pb-2 px-3">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Doctors
               </p>
             </div>
           )}
-          {collapsed && <div className="pt-4" />}
-          {DOCTORS.map((doc) => (
+          {visibleDoctors.length > 0 && collapsed && <div className="pt-4" />}
+          {visibleDoctors.map((doc) => (
             <NavLink
               key={doc.code}
               to={`/doctor/${doc.code}`}
@@ -213,9 +231,16 @@ export default function Layout() {
             {accountOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                 {user && (
-                  <p className="text-xs text-gray-500 truncate px-4 pb-2 border-b border-gray-100" title={user.email}>
-                    {user.email}
-                  </p>
+                  <div className="px-4 pb-2 border-b border-gray-100">
+                    <p className="text-xs text-gray-500 truncate" title={user.email}>
+                      {user.email}
+                    </p>
+                    {role && (
+                      <p className="text-xs font-medium text-primary-600 mt-0.5 capitalize">
+                        {role.replace('department:', 'Dept: ').replace('doctor:', 'Dr: ')}
+                      </p>
+                    )}
+                  </div>
                 )}
                 <button
                   onClick={() => { setAccountOpen(false); signOut() }}
@@ -224,14 +249,16 @@ export default function Layout() {
                   <LogOut className="w-4 h-4" />
                   Sign Out
                 </button>
-                <button
-                  onClick={() => { if (confirm('Reset all data back to initial state?')) { setAccountOpen(false); resetData() } }}
-                  disabled={loading}
-                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset All
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => { if (confirm('Reset all data back to initial state?')) { setAccountOpen(false); resetData() } }}
+                    disabled={loading}
+                    className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset All
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -365,7 +365,6 @@ interface AppContextType {
   updateCrossConsultationStatus: (id: string, status: CrossConsultationStatus) => void
   editCrossConsultation: (id: string, departmentName: string, doctorName: string, notes: string) => void
   deleteCrossConsultation: (id: string) => void
-  updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   // Department online/offline
   toggleDeptOffline: (deptId: string) => void
   isDeptOffline: (deptId: string) => boolean
