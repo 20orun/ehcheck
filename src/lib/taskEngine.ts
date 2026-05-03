@@ -62,10 +62,17 @@ export function isValidTransition(from: TaskStatus, to: TaskStatus): boolean {
 }
 
 // ─── Prerequisite Check ─────────────────────────────
-// CONSULT tasks require ALL mandatory diagnostic tasks COMPLETED
+// CONSULT tasks require only BILLING to be COMPLETED
+// REVIEW tasks require ALL mandatory diagnostic tasks COMPLETED
 export function arePrerequisitesMet(task: PatientTask, allPatientTasks: PatientTask[]): boolean {
   if (task.task_group !== 'CONSULT' && task.task_group !== 'REVIEW') return true
 
+  if (task.task_group === 'CONSULT') {
+    const billingTask = allPatientTasks.find((t) => t.step_name === 'Billing')
+    return billingTask != null && billingTask.status === 'COMPLETED'
+  }
+
+  // REVIEW: all mandatory diagnostics must be completed
   const prereqGroups: TaskGroup[] = ['PHLEB', 'USG', 'PPBS', 'XRAY', 'MAMMO', 'BMD', 'ECG', 'ECHO', 'TMT', 'PFT', 'GYNECOLOGY']
   const mandatoryPrereqs = allPatientTasks.filter(
     (t) => prereqGroups.includes(t.task_group) && t.is_mandatory

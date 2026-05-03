@@ -23,24 +23,18 @@ export default function DoctorView() {
 
   const offline = isDoctorOffline(doctor.code)
 
+  const isConsultDone = (p: typeof patients[0]) =>
+    p.tasks.find((t) => t.task_group === 'CONSULT')?.status === 'COMPLETED'
+
   const filtered = patients.filter((p) => {
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase()) && !p.uhid.toLowerCase().includes(searchQuery.toLowerCase())) return false
     if (statusFilter === 'ALL') return true
-    if (statusFilter === 'COMPLETED') {
-      const mandatory = p.tasks.filter((t) => t.is_mandatory)
-      return mandatory.length > 0 && mandatory.every((t) => t.status === 'COMPLETED')
-    }
-    if (statusFilter === 'IN_PROGRESS') {
-      const mandatory = p.tasks.filter((t) => t.is_mandatory)
-      return !(mandatory.length > 0 && mandatory.every((t) => t.status === 'COMPLETED'))
-    }
+    if (statusFilter === 'COMPLETED') return isConsultDone(p)
+    if (statusFilter === 'IN_PROGRESS') return !isConsultDone(p)
     return true
   })
 
-  const completedCount = patients.filter((p) => {
-    const mandatory = p.tasks.filter((t) => t.is_mandatory)
-    return mandatory.length > 0 && mandatory.every((t) => t.status === 'COMPLETED')
-  }).length
+  const completedCount = patients.filter(isConsultDone).length
 
   return (
     <div className="space-y-6">
@@ -125,15 +119,11 @@ export default function DoctorView() {
             const completedTasks = patient.tasks.filter((t) => t.status === 'COMPLETED').length
             const totalTasks = patient.tasks.length
             const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-            const mandatoryDone = patient.tasks.filter((t) => t.is_mandatory).every((t) => t.status === 'COMPLETED')
             const activeGroups = groupStatuses.filter((g) => g.status === 'IN_PROGRESS')
 
-            // Find the relevant CONSULT/REVIEW task for this doctor
-            const doctorTask = patient.tasks.find(
-              (t) =>
-                (t.task_group === 'CONSULT' || t.task_group === 'REVIEW') &&
-                (t.status === 'NOT_STARTED' || t.status === 'IN_PROGRESS' || t.status === 'DELAYED')
-            )
+            // Only manage the CONSULT (physician consultation) task
+            const consultTask = patient.tasks.find((t) => t.task_group === 'CONSULT')
+            const consultDone = consultTask?.status === 'COMPLETED'
 
             return (
               <div
@@ -151,7 +141,7 @@ export default function DoctorView() {
                           {patient.name}
                         </Link>
                         <PriorityBadge priority={patient.priority} />
-                        {mandatoryDone && (
+                        {consultDone && (
                           <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
                             Complete
                           </span>
@@ -164,9 +154,14 @@ export default function DoctorView() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-medium text-gray-500">{pct}%</span>
-                    {doctorTask && doctorTask.status === 'NOT_STARTED' && (
+                    {consultDone ? (
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Consulted
+                      </span>
+                    ) : consultTask && (consultTask.status === 'NOT_STARTED' || consultTask.status === 'DELAYED') ? (
                       <button
-                        onClick={() => startTask(doctorTask.id)}
+                        onClick={() => startTask(consultTask.id)}
                         disabled={offline}
                         title={offline ? 'Doctor is offline' : 'Start consultation'}
                         className={clsx(
@@ -179,16 +174,15 @@ export default function DoctorView() {
                         <Play className="w-3 h-3" />
                         Start
                       </button>
-                    )}
-                    {doctorTask && (doctorTask.status === 'IN_PROGRESS' || doctorTask.status === 'DELAYED') && (
+                    ) : consultTask && consultTask.status === 'IN_PROGRESS' ? (
                       <button
-                        onClick={() => completeTask(doctorTask.id)}
+                        onClick={() => completeTask(consultTask.id)}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
                       >
                         <CheckCircle2 className="w-3 h-3" />
                         Complete
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">

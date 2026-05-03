@@ -2,34 +2,20 @@ import { useState, type FormEvent } from 'react'
 import { useAuth } from '@/store/AuthContext'
 
 export default function Auth() {
-  const { signIn, signUp } = useAuth()
-  const [isSignUp, setIsSignUp] = useState(false)
+  const { signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    setMessage(null)
     setSubmitting(true)
 
-    if (isSignUp) {
-      const { error } = await signUp(email, password)
-      if (error) {
-        setError(error)
-      } else {
-        setMessage('Check your email for a confirmation link.')
-        setEmail('')
-        setPassword('')
-      }
-    } else {
-      const { error } = await signIn(email, password)
-      if (error) {
-        setError(error)
-      }
+    const { error } = await signIn(email, password)
+    if (error) {
+      setError(error)
     }
 
     setSubmitting(false)
@@ -50,7 +36,7 @@ export default function Auth() {
         {/* Form Card */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            {isSignUp ? 'Create Account' : 'Sign In'}
+            Sign In
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -88,28 +74,16 @@ export default function Auth() {
             {error && (
               <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
             )}
-            {message && (
-              <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{message}</p>
-            )}
-
             <button
               type="submit"
               disabled={submitting}
               className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
             >
-              {submitting ? 'Please wait…' : isSignUp ? 'Sign Up' : 'Sign In'}
+              {submitting ? 'Please wait…' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null) }}
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-            >
-              {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-            </button>
-          </div>
+
         </div>
       </div>
     </div>
