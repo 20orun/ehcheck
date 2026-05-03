@@ -49,12 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) fetchRole(session.user.id)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
       if (session?.user) {
-        fetchRole(session.user.id)
+        // Only re-fetch role when the user actually changes (sign-in / initial load / profile update).
+        // TOKEN_REFRESHED is a silent background JWT renewal — the user identity hasn't changed,
+        // so setting roleLoading=true here would cause AppProvider to unmount and wipe all UI state.
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED') {
+          fetchRole(session.user.id)
+        }
       } else {
         setRole(null)
       }

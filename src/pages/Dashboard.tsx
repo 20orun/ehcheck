@@ -48,7 +48,7 @@ export default function Dashboard() {
   const patients = getPatientsWithCurrentStep()
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<string>('priority')
+  const [sortBy, setSortBy] = useState<string>('checkIn')
   const [tatInHours, setTatInHours] = useState(false)
   const [waitInHours, setWaitInHours] = useState(false)
 
@@ -66,8 +66,16 @@ export default function Dashboard() {
       // Longest wait first; not-checked-in patients go to the bottom
       return b.waitingMinutes - a.waitingMinutes || a.name.localeCompare(b.name)
     }
-    // Default: priority (VIP first), then alphabetical
-    if (a.priority !== b.priority) return a.priority === 'VIP' ? -1 : 1
+    if (sortBy === 'priority') {
+      if (a.priority !== b.priority) return a.priority === 'VIP' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    }
+    // Default (checkIn): checked-in first sorted by earliest check-in, then alpha for not-checked-in
+    const aTime = a.checked_in_at ? new Date(a.checked_in_at).getTime() : null
+    const bTime = b.checked_in_at ? new Date(b.checked_in_at).getTime() : null
+    if (aTime !== null && bTime !== null) return aTime - bTime
+    if (aTime !== null) return -1
+    if (bTime !== null) return 1
     return a.name.localeCompare(b.name)
   })
 
@@ -181,8 +189,7 @@ export default function Dashboard() {
       {/* Sort options */}
       <div className="flex items-center gap-2 text-xs text-gray-500">
         <span>Sort by:</span>
-        {[
-          { key: 'priority', label: 'Priority' },
+        {[          { key: 'checkIn', label: 'Check-In Time' },          { key: 'priority', label: 'Priority' },
           { key: 'alpha', label: 'A\u2013Z' },
           { key: 'package', label: 'Package' },
           { key: 'waitTime', label: 'Wait Time' },
