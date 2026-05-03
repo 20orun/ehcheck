@@ -41,10 +41,10 @@ export default function Auth() {
         {/* Header */}
         <div className="text-center">
           <div className="mx-auto w-12 h-12 rounded-xl bg-primary-600 flex items-center justify-center mb-4">
-            <span className="text-white font-bold text-lg">EF</span>
+            <span className="text-white font-bold text-lg">HC</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ExecuFlow</h1>
-          <p className="text-sm text-gray-500 mt-1">Health Check Tracker</p>
+          <h1 className="text-2xl font-bold text-gray-900">PHC</h1>
+          <p className="text-sm text-gray-500 mt-1">Health Checkup Tracker</p>
         </div>
 
         {/* Form Card */}

@@ -96,12 +96,12 @@ export default function Layout() {
       >
         <div className={clsx('flex items-center gap-3 py-5 border-b border-gray-200 shrink-0', collapsed ? 'px-3 justify-center' : 'px-6')}>
           <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-sm">EF</span>
+            <span className="text-white font-bold text-sm">HC</span>
           </div>
           {!collapsed && (
             <div>
-              <h1 className="text-lg font-bold text-gray-900">ExecuFlow</h1>
-              <p className="text-xs text-gray-500">Health Check Tracker</p>
+              <h1 className="text-lg font-bold text-gray-900">PHC</h1>
+              <p className="text-xs text-gray-500">Health Checkup Tracker</p>
             </div>
           )}
           <button
