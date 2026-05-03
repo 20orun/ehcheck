@@ -1,4 +1,5 @@
 import type { StepStatus, Priority } from '@/types'
+import { Check, ArrowUp, Minus } from 'lucide-react'
 import clsx from 'clsx'
 
 export function StatusBadge({ status }: { status: StepStatus }) {
@@ -13,6 +14,28 @@ export function StatusBadge({ status }: { status: StepStatus }) {
       )}
     >
       {status.replace('_', ' ')}
+    </span>
+  )
+}
+
+export function TaskStatusIcon({ status }: { status: StepStatus }) {
+  if (status === 'COMPLETED') {
+    return (
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-green-600 text-white shrink-0">
+        <Check className="w-3 h-3" strokeWidth={3} />
+      </span>
+    )
+  }
+  if (status === 'IN_PROGRESS' || status === 'DELAYED') {
+    return (
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-blue-500 text-white shrink-0">
+        <ArrowUp className="w-3 h-3" strokeWidth={3} />
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-gray-200 text-gray-500 shrink-0">
+      <Minus className="w-3 h-3" strokeWidth={2} />
     </span>
   )
 }

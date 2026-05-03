@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
-import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
+import { TaskStatusIcon, EmptyState } from '@/components/ui'
 import { Search, Wifi, WifiOff, Play, CheckCircle2, Users } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { DOCTORS } from '@/types'
@@ -163,11 +163,13 @@ export default function DoctorView() {
                         <div className="flex items-center gap-2">
                           <Link
                             to={`/patient/${patient.id}`}
-                            className="text-sm font-semibold text-gray-900 hover:text-primary-600"
+                            className={clsx(
+                              'text-sm font-semibold text-gray-900 hover:text-primary-600',
+                              patient.priority === 'VIP' && 'border-b-2 border-amber-400'
+                            )}
                           >
                             {patient.name}
                           </Link>
-                          <PriorityBadge priority={patient.priority} />
                           {consultDone && (
                             <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
                               Complete
@@ -221,7 +223,7 @@ export default function DoctorView() {
                   {activeGroups.length > 0 && (
                     <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                       {activeGroups.map((g) => (
-                        <StatusBadge key={g.group} status={g.status} />
+                        <TaskStatusIcon key={g.group} status={g.status} />
                       ))}
                       <span className="text-xs text-gray-400">
                         {activeGroups.map((g) => g.group).join(', ')}

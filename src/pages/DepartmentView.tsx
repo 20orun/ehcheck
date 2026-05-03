@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
-import { KPICard, StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
+import { KPICard, TaskStatusIcon, EmptyState } from '@/components/ui'
 import { Play, CheckCircle2, ArrowUpDown, Search, Wifi, WifiOff, Users, X } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { DOCTORS } from '@/types'
@@ -256,31 +256,27 @@ export default function DepartmentView() {
                 // For billing dept: hide Start button if patient not checked in
                 const canStart = !isBilling || !!p.checked_in_at
                 return (
-                  <div key={p.id} className="px-4 py-3 flex items-center gap-4">
+                  <div key={p.id} className="px-3 py-2 flex items-center gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <Link
                           to={`/patient/${p.id}`}
-                          className="font-medium text-primary-600 hover:underline truncate"
+                          className={clsx(
+                            'font-medium text-primary-600 truncate',
+                            p.priority === 'VIP' ? 'border-b-2 border-amber-400' : 'hover:underline'
+                          )}
                         >
                           {p.name}
                         </Link>
-                        <PriorityBadge priority={p.priority} />
                         {isBilling && !p.checked_in_at && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
                             Not checked in
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {p.currentStep?.step_name} &bull; Waiting {p.waitingMinutes} min
-                        {p.checked_in_at && (
-                          <> &bull; Check-in {new Date(p.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</>
-                        )}
-                      </p>
                     </div>
 
-                    <StatusBadge status={p.currentStep?.status || 'NOT_STARTED'} />
+                    <TaskStatusIcon status={p.currentStep?.status || 'NOT_STARTED'} />
 
                     <div className="flex items-center gap-1">
                       {p.currentStep?.status === 'NOT_STARTED' && canStart && (
