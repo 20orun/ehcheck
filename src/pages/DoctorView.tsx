@@ -187,7 +187,7 @@ export default function DoctorView() {
                 </div>
                 <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={clsx('h-full rounded-full transition-all', mandatoryDone ? 'bg-green-500' : 'bg-primary-500')}
+                    className={clsx('h-full rounded-full transition-all', consultDone ? 'bg-green-500' : 'bg-primary-500')}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
