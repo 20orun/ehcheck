@@ -15,6 +15,7 @@ import Calendar from '@/pages/Calendar'
 import DailyReport from '@/pages/DailyReport'
 import CrossConsultations from '@/pages/CrossConsultations'
 import DepartmentDashboard from '@/pages/DepartmentDashboard'
+import Accounts from '@/pages/Accounts'
 import Auth from '@/pages/Auth'
 
 // ─── Role-aware route guard ───────────────────────────
@@ -132,6 +133,11 @@ function AppRoutes() {
           {/* Department Dashboard – admin + coordinator only */}
           <Route path="/departments"
             element={<Guard allowed={fullAccess}><DepartmentDashboard /></Guard>}
+          />
+
+          {/* Accounts – admin only */}
+          <Route path="/accounts"
+            element={<Guard allowed={isAdmin}><Accounts /></Guard>}
           />
 
           {/* Catch-all: redirect to role's home */}

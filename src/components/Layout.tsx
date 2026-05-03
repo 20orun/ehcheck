@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Stethoscope,
   BookOpen,
+  UsersRound,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/store/AppContext'
@@ -37,6 +38,7 @@ const ALL_NAV_ITEMS = [
   { to: '/calendar', icon: CalendarDays, label: 'Calendar', adminOnly: false, hideForCoordinator: false },
   { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report', adminOnly: false, hideForCoordinator: false },
   { to: '/cross-consultations', icon: BookOpen, label: 'Cross Consults', adminOnly: false, hideForCoordinator: false },
+  { to: '/accounts', icon: UsersRound, label: 'Accounts', adminOnly: true, hideForCoordinator: false },
 ]
 
 export default function Layout() {
@@ -50,7 +52,7 @@ export default function Layout() {
 
   // Build the visible nav items based on the current role
   const navItems = (isAdmin || isCoordinator)
-    ? ALL_NAV_ITEMS.filter((item) => !(isCoordinator && item.hideForCoordinator))
+    ? ALL_NAV_ITEMS.filter((item) => !(isCoordinator && (item.hideForCoordinator || item.adminOnly)))
     : []
 
   // For department/doctor roles only show their specific entry in the sidebar sections

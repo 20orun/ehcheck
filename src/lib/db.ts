@@ -176,7 +176,7 @@ export async function insertPatient(patient: Patient): Promise<void> {
   const { error } = await supabase.from('patients').insert({
     id: patient.id,
     name: patient.name,
-    uhid: patient.uhid,
+    uhid: patient.uhid || null,
     phone: patient.phone ?? null,
     package_id: patient.package_id,
     assigned_doctor: patient.assigned_doctor,

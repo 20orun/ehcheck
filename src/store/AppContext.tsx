@@ -102,6 +102,7 @@ type Action =
   | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
+  | { type: 'REMOVE_TASK'; payload: { taskId: string } }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -312,6 +313,11 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         doctorStatuses: { ...state.doctorStatuses, [action.payload.code]: action.payload.isOffline },
       }
+    case 'REMOVE_TASK':
+      return {
+        ...state,
+        patientTasks: state.patientTasks.filter((t) => t.id !== action.payload.taskId),
+      }
     default:
       return state
   }
@@ -481,6 +487,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const t = payload.new as PatientTask
           dispatch({ type: 'UPSERT_TASK', payload: t })
+        }
+      )
+      // Tasks deleted (e.g. package change replaces all tasks for a patient)
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'patient_tasks' },
+        (payload) => {
+          const taskId = (payload.old as { id: string }).id
+          if (taskId) dispatch({ type: 'REMOVE_TASK', payload: { taskId } })
         }
       )
       // Patient updates (check-in, priority changes) from another device
@@ -1089,9 +1104,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
 
       dispatch({ type: 'UPDATE_PATIENT_PACKAGE', payload: { patientId, packageId, tasks: newTasks, assignedDoctor } })
-      updatePatientPackageDb(patientId, packageId, newTasks, assignedDoctor).catch((err) =>
-        console.warn('Failed to persist package update:', err)
-      )
+      updatePatientPackageDb(patientId, packageId, newTasks, assignedDoctor).catch((err) => {
+        console.error('Failed to persist package update:', err)
+        // DB write failed – reload authoritative data from server to restore correct state
+        loadAllData(selectedDate).then((data) => {
+          dispatch({ type: 'SET_ALL_DATA', payload: data })
+        }).catch(console.error)
+        setError('Failed to save package assignment. The page data has been refreshed from the server.')
+      })
     },
     [state.packageSteps, state.patientTasks, selectedDate]
   )
