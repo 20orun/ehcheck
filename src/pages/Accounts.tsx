@@ -24,22 +24,6 @@ interface RowState {
   error: string | null
 }
 
-function roleLabel(role: string, departments: Department[]): string {
-  if (role === 'coordinator') return 'Coordinator'
-  if (role.startsWith('department:')) {
-    const deptId = role.slice('department:'.length)
-    const dept = departments.find((d) => d.id === deptId)
-    return dept ? `Dept – ${dept.name}` : role
-  }
-  if (role.startsWith('doctor:')) {
-    const code = role.slice('doctor:'.length) as 'S' | 'A' | 'I'
-    const doc = DOCTORS.find((d) => d.code === code)
-    return doc ? `Doctor – ${doc.name}` : role
-  }
-  if (role === 'admin') return 'Admin'
-  return role
-}
-
 export default function Accounts() {
   const { user: currentUser, isAdmin } = useAuth()
   const navigate = useNavigate()
@@ -164,10 +148,6 @@ export default function Accounts() {
 
   if (!isAdmin) return null
 
-  const nonAdminUsers = users.filter((u) => {
-    const role = rows[u.id]?.currentRole
-    return role !== 'admin' || u.id === currentUser?.id
-  })
   // Show admin users (read-only) and non-admin users (editable)
   const adminUsers = users.filter((u) => rows[u.id]?.currentRole === 'admin')
   const editableUsers = users.filter((u) => rows[u.id]?.currentRole !== 'admin')
