@@ -1,11 +1,19 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { Search, Wifi, WifiOff, Play, CheckCircle2 } from 'lucide-react'
+import { Search, Wifi, WifiOff, Play, CheckCircle2, Users } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { DOCTORS } from '@/types'
 import { getTaskGroupStatuses } from '@/lib/taskEngine'
 import clsx from 'clsx'
+
+const GROUP_PALETTE = [
+  { border: 'border-teal-400',   bg: 'bg-teal-50/40',   label: 'text-teal-700',   header: 'bg-teal-50' },
+  { border: 'border-indigo-400', bg: 'bg-indigo-50/40', label: 'text-indigo-700', header: 'bg-indigo-50' },
+  { border: 'border-orange-400', bg: 'bg-orange-50/40', label: 'text-orange-700', header: 'bg-orange-50' },
+  { border: 'border-purple-400', bg: 'bg-purple-50/40', label: 'text-purple-700', header: 'bg-purple-50' },
+  { border: 'border-cyan-400',   bg: 'bg-cyan-50/40',   label: 'text-cyan-700',   header: 'bg-cyan-50' },
+]
 
 export default function DoctorView() {
   const { code } = useParams<{ code: string }>()
@@ -114,99 +122,134 @@ export default function DoctorView() {
         <EmptyState message="No patients assigned to this doctor" />
       ) : (
         <div className="space-y-3">
-          {filtered.map((patient) => {
-            const groupStatuses = getTaskGroupStatuses(patient.tasks)
-            const completedTasks = patient.tasks.filter((t) => t.status === 'COMPLETED').length
-            const totalTasks = patient.tasks.length
-            const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-            const activeGroups = groupStatuses.filter((g) => g.status === 'IN_PROGRESS')
+          {(() => {
+            // Build render units for visual grouping
+            const allGroupIds = [...new Set(filtered.filter((p) => p.group_id).map((p) => p.group_id as string))]
+            const groupPaletteMap = Object.fromEntries(allGroupIds.map((gid, i) => [gid, GROUP_PALETTE[i % GROUP_PALETTE.length]]))
 
-            // Only manage the CONSULT (physician consultation) task
-            const consultTask = patient.tasks.find((t) => t.task_group === 'CONSULT')
-            const consultDone = consultTask?.status === 'COMPLETED'
+            type RenderUnit =
+              | { type: 'solo'; patient: typeof filtered[0] }
+              | { type: 'group'; groupId: string; patients: typeof filtered }
+            const units: RenderUnit[] = []
+            const seenGroups = new Set<string>()
+            filtered.forEach((p) => {
+              if (!p.group_id) {
+                units.push({ type: 'solo', patient: p })
+              } else if (!seenGroups.has(p.group_id)) {
+                seenGroups.add(p.group_id)
+                units.push({ type: 'group', groupId: p.group_id, patients: filtered.filter((fp) => fp.group_id === p.group_id) })
+              }
+            })
 
-            return (
-              <div
-                key={patient.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-primary-200 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Link
-                          to={`/patient/${patient.id}`}
-                          className="text-sm font-semibold text-gray-900 hover:text-primary-600"
-                        >
-                          {patient.name}
-                        </Link>
-                        <PriorityBadge priority={patient.priority} />
-                        {consultDone && (
-                          <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
-                            Complete
-                          </span>
-                        )}
+            const renderCard = (patient: typeof filtered[0]) => {
+              const groupStatuses = getTaskGroupStatuses(patient.tasks)
+              const completedTasks = patient.tasks.filter((t) => t.status === 'COMPLETED').length
+              const totalTasks = patient.tasks.length
+              const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+              const activeGroups = groupStatuses.filter((g) => g.status === 'IN_PROGRESS')
+
+              // Only manage the CONSULT (physician consultation) task
+              const consultTask = patient.tasks.find((t) => t.task_group === 'CONSULT')
+              const consultDone = consultTask?.status === 'COMPLETED'
+
+              return (
+                <div
+                  key={patient.id}
+                  className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-primary-200 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/patient/${patient.id}`}
+                            className="text-sm font-semibold text-gray-900 hover:text-primary-600"
+                          >
+                            {patient.name}
+                          </Link>
+                          <PriorityBadge priority={patient.priority} />
+                          {consultDone && (
+                            <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
+                              Complete
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          UHID: {patient.uhid} &bull; {patient.package_name || 'No package'}
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        UHID: {patient.uhid} &bull; {patient.package_name || 'No package'}
-                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-medium text-gray-500">{pct}%</span>
+                      {consultDone ? (
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Consulted
+                        </span>
+                      ) : consultTask && (consultTask.status === 'NOT_STARTED' || consultTask.status === 'DELAYED') ? (
+                        <button
+                          onClick={() => startTask(consultTask.id)}
+                          disabled={offline}
+                          title={offline ? 'Doctor is offline' : 'Start consultation'}
+                          className={clsx(
+                            'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors',
+                            offline
+                              ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                              : 'bg-primary-50 border-primary-200 text-primary-700 hover:bg-primary-100'
+                          )}
+                        >
+                          <Play className="w-3 h-3" />
+                          Start
+                        </button>
+                      ) : consultTask && consultTask.status === 'IN_PROGRESS' ? (
+                        <button
+                          onClick={() => completeTask(consultTask.id)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          Complete
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-medium text-gray-500">{pct}%</span>
-                    {consultDone ? (
-                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Consulted
-                      </span>
-                    ) : consultTask && (consultTask.status === 'NOT_STARTED' || consultTask.status === 'DELAYED') ? (
-                      <button
-                        onClick={() => startTask(consultTask.id)}
-                        disabled={offline}
-                        title={offline ? 'Doctor is offline' : 'Start consultation'}
-                        className={clsx(
-                          'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors',
-                          offline
-                            ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-primary-50 border-primary-200 text-primary-700 hover:bg-primary-100'
-                        )}
-                      >
-                        <Play className="w-3 h-3" />
-                        Start
-                      </button>
-                    ) : consultTask && consultTask.status === 'IN_PROGRESS' ? (
-                      <button
-                        onClick={() => completeTask(consultTask.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Complete
-                      </button>
-                    ) : null}
+                  <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={clsx('h-full rounded-full transition-all', consultDone ? 'bg-green-500' : 'bg-primary-500')}
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
+                  {activeGroups.length > 0 && (
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      {activeGroups.map((g) => (
+                        <StatusBadge key={g.group} status={g.status} />
+                      ))}
+                      <span className="text-xs text-gray-400">
+                        {activeGroups.map((g) => g.group).join(', ')}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={clsx('h-full rounded-full transition-all', consultDone ? 'bg-green-500' : 'bg-primary-500')}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                {activeGroups.length > 0 && (
-                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                    {activeGroups.map((g) => (
-                      <StatusBadge key={g.group} status={g.status} />
-                    ))}
-                    <span className="text-xs text-gray-400">
-                      {activeGroups.map((g) => g.group).join(', ')}
+              )
+            }
+
+            return units.map((unit) => {
+              if (unit.type === 'solo') return renderCard(unit.patient)
+              const palette = groupPaletteMap[unit.groupId]
+              return (
+                <div key={`group-${unit.groupId}`} className={clsx('rounded-xl border-2', palette.border, palette.bg, 'p-2 space-y-2')}>
+                  <div className={clsx('flex items-center gap-2 px-2 py-1.5 rounded-lg', palette.header)}>
+                    <Users className={clsx('w-4 h-4', palette.label)} />
+                    <span className={clsx('text-xs font-semibold', palette.label)}>
+                      Checked In Together · {unit.patients.length} patients
                     </span>
                   </div>
-                )}
-              </div>
-            )
-          })}
+                  {unit.patients.map((p) => renderCard(p))}
+                </div>
+              )
+            })
+          })()}
         </div>
       )}
     </div>
   )
 }
-
