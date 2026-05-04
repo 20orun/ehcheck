@@ -41,10 +41,17 @@ const ALL_NAV_ITEMS = [
   { to: '/accounts', icon: UsersRound, label: 'Accounts', adminOnly: true, hideForCoordinator: false },
 ]
 
+function getISTNow(): string {
+  const istMs = Date.now() + 5.5 * 3600 * 1000
+  const d = new Date(istMs)
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+}
+
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [nowIST, setNowIST] = useState(getISTNow)
   const accountRef = useRef<HTMLDivElement>(null)
   const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
   const { user, signOut, isAdmin, isCoordinator, isDepartment, isDoctor, departmentId, doctorCode, role } = useAuth()
@@ -74,6 +81,11 @@ export default function Layout() {
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    const id = setInterval(() => setNowIST(getISTNow()), 1000)
+    return () => clearInterval(id)
   }, [])
 
   return (
@@ -218,6 +230,8 @@ export default function Layout() {
               {getPageTitle(location.pathname)}
             </h2>
           </div>
+
+          <span className="font-mono text-sm font-semibold text-gray-700 tabular-nums">{nowIST}</span>
 
           <div className="relative">
             <Bell className="w-5 h-5 text-gray-500" />

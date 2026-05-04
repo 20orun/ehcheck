@@ -3,6 +3,8 @@ import { useApp } from '@/store/AppContext'
 import { Link } from 'react-router-dom'
 import { EmptyState } from '@/components/ui'
 import type { Package, PatientTask, DoctorCode } from '@/types'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
 
 const TRACKER_COLS = [
   { key: 'bloodSample', label: 'BLOOD' },
@@ -38,6 +40,26 @@ const TRACKER_KEY_MAP: Record<string, keyof Package> = {
   d: 'tracker_dental',
 }
 
+function getISTTimeString(): string {
+  // now.getTime() is always UTC ms; add 5h30m to get IST
+  const istMs = Date.now() + 5.5 * 3600 * 1000
+  const ist = new Date(istMs)
+  return `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}`
+}
+
+function isPpbsAlertWindow(ppbsTime: string | null, currentIST: string): boolean {
+  if (!ppbsTime) return false
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    if (isNaN(h) || isNaN(m)) return -1
+    return h * 60 + m
+  }
+  const ppbsMin = toMinutes(ppbsTime)
+  const currMin = toMinutes(currentIST)
+  if (ppbsMin < 0 || currMin < 0) return false
+  return Math.abs(currMin - ppbsMin) <= 3
+}
+
 function getTrackerCellValue(pkg: Package | undefined, key: string): string {
   if (!pkg) return ''
   const field = TRACKER_KEY_MAP[key]
@@ -63,6 +85,7 @@ function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
 }
 
 const ROWS_PER_SHEET = 20
+const PATIENTS_PER_PAGE = 20
 // 22 columns: A=SL.NO, B=NAME, C=UHID, D=PACKAGE, E–R=14 tracker cols, S=OP, T=IN, U=OUT
 const COL_HEADERS = [
   'SL.\nNO', 'PATIENT NAME', 'UHID', 'PACKAGE',
@@ -258,7 +281,23 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
 }
 
 export default function Tracker() {
-  const { state } = useApp()
+  const { state, updatePatientPpbsTime } = useApp()
+
+  // ─── PPBS inline-edit state ──────────────────────
+  const [editingPpbsId, setEditingPpbsId] = useState<string | null>(null)
+  const [ppbsInputValue, setPpbsInputValue] = useState('')
+  const [glowingCells, setGlowingCells] = useState<Record<string, boolean>>({})
+  const [nowIST, setNowIST] = useState(getISTTimeString)
+  // ─── Pagination & fullscreen ──────────────────────
+  const [currentPage, setCurrentPage] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const touchStartX = useRef<number | null>(null)
+
+  useEffect(() => {
+    const id = setInterval(() => setNowIST(getISTTimeString()), 1000)
+    return () => clearInterval(id)
+  }, [])
 
   const checkedIn: CheckedInPatient[] = state.patients
     .filter((p): p is typeof p & { checked_in_at: string } => p.checked_in_at !== null)
@@ -278,75 +317,275 @@ export default function Tracker() {
       }
     })
 
+  const totalPages = Math.max(1, Math.ceil(checkedIn.length / PATIENTS_PER_PAGE))
+
+  const goToPrev = useCallback(() => setCurrentPage((p) => Math.max(0, p - 1)), [])
+  const goToNext = useCallback(() => setCurrentPage((p) => p + 1), [])
+
+  // ─── PPBS save handler ────────────────────────────
+  const savePpbsTime = useCallback(async (patientId: string, value: string) => {
+    const trimmed = value.trim()
+    setEditingPpbsId(null)
+    setPpbsInputValue('')
+    try {
+      await updatePatientPpbsTime(patientId, trimmed || null)
+      setGlowingCells((prev) => ({ ...prev, [patientId]: true }))
+      setTimeout(() => {
+        setGlowingCells((prev) => { const next = { ...prev }; delete next[patientId]; return next })
+      }, 4000)
+    } catch (err) {
+      console.warn('Failed to save PPBS time:', err)
+    }
+  }, [updatePatientPpbsTime])
+
+  const openPpbsEdit = useCallback((patientId: string, currentTime: string | null) => {
+    setEditingPpbsId(patientId)
+    setPpbsInputValue(currentTime ?? '')
+    // Focus the input after render
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
+
+  // ─── Keyboard navigation ──────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't hijack arrow keys when an input is focused
+      const tag = (e.target as Element)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'ArrowLeft') goToPrev()
+      else if (e.key === 'ArrowRight') goToNext()
+      else if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [goToPrev, goToNext, isFullscreen])
+
+  // ─── Swipe handlers ───────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+  }, [])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    if (Math.abs(dx) > 50) {
+      if (dx < 0) goToNext()
+      else goToPrev()
+    }
+    touchStartX.current = null
+  }, [goToNext, goToPrev])
+
+  // ─── Early return (after all hooks) ──────────────
   if (checkedIn.length === 0) {
     return <EmptyState message="No checked-in patients yet" />
   }
 
+  // ─── Derived values for render ────────────────────
+  const safePage = Math.min(currentPage, totalPages - 1)
+  const pagePatients = checkedIn.slice(safePage * PATIENTS_PER_PAGE, (safePage + 1) * PATIENTS_PER_PAGE)
+  const anyPpbsYellow = pagePatients.some((p) => isPpbsAlertWindow(p.ppbs_time, nowIST))
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Tracker</h2>
-          <p className="text-sm text-gray-500">Download the current tracker snapshot including the export date.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="inline-flex items-center rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm font-semibold text-green-800">
+    <div className={isFullscreen ? 'fixed inset-0 z-50 bg-white flex flex-col px-3 pt-1.5 pb-1.5 gap-1.5' : 'space-y-4'}>
+      {/* ── Header bar ── */}
+      <div className="flex items-center gap-2 shrink-0">
+        {!isFullscreen && (
+          <div className="mr-auto">
+            <h2 className="text-lg font-semibold text-gray-900">Tracker</h2>
+            <p className="text-sm text-gray-500">Download the current tracker snapshot including the export date.</p>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {/* Live clock – fullscreen only */}
+          {isFullscreen && (
+            <span className="font-mono text-sm font-bold text-gray-700 tabular-nums px-2 py-0.5 rounded bg-gray-100 select-none">
+              {nowIST}
+            </span>
+          )}
+          {/* Page navigation */}
+          <div className="inline-flex items-center rounded border border-gray-200 bg-white px-0.5 py-0.5">
+            <button
+              type="button"
+              onClick={goToPrev}
+              disabled={safePage === 0}
+              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+              title="Previous page (←)"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs font-semibold text-gray-700 px-1 tabular-nums select-none">
+              {safePage + 1}/{totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={goToNext}
+              disabled={safePage >= totalPages - 1}
+              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+              title="Next page (→)"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {/* Lunch count */}
+          <div className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-0.5 text-xs font-semibold text-green-800">
             Lunch: {checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'lunch') === '-').length}
           </div>
+          {/* Download Excel */}
           <button
             type="button"
             onClick={() => void downloadTrackerExcel(checkedIn)}
-            className="inline-flex items-center rounded-md bg-primary-700 px-3 py-2 text-sm font-medium text-white hover:bg-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="inline-flex items-center rounded bg-primary-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             Download Excel
           </button>
+          {/* Fullscreen toggle */}
+          <button
+            type="button"
+            onClick={() => setIsFullscreen((f) => !f)}
+            className="inline-flex items-center rounded border border-gray-300 px-1.5 py-0.5 text-gray-600 hover:bg-gray-50"
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
         </div>
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full text-sm">
+
+      {/* ── Table ── */}
+      <div
+        className={
+          isFullscreen
+            ? 'flex-1 overflow-auto rounded-lg border border-gray-200 bg-white min-h-0'
+            : 'bg-white rounded-lg border border-gray-200 overflow-x-auto'
+        }
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <table className={isFullscreen ? 'w-full table-fixed text-[11px]' : 'w-full text-sm'}>
+          {isFullscreen && (
+            <colgroup>
+              <col style={{ width: '2.5%' }} />{/* # */}
+              <col style={{ width: '11%' }} />{/* Name */}
+              <col style={{ width: '6.5%' }} />{/* UHID */}
+              <col style={{ width: '8.5%' }} />{/* Package */}
+              {/* 14 tracker cols */}
+              <col style={{ width: '3.7%' }} />{/* BLOOD */}
+              <col style={{ width: '3.7%' }} />{/* USG */}
+              <col style={{ width: '3.7%' }} />{/* BREAKFAST */}
+              <col style={{ width: '4%' }} />{/* PPBS */}
+              <col style={{ width: '3.7%' }} />{/* X-RAY */}
+              <col style={{ width: '3.7%' }} />{/* MAMMO */}
+              <col style={{ width: '3.2%' }} />{/* BMD */}
+              <col style={{ width: '3.2%' }} />{/* ECG */}
+              <col style={{ width: '3.2%' }} />{/* ECHO */}
+              <col style={{ width: '3.2%' }} />{/* TMT */}
+              <col style={{ width: '3.2%' }} />{/* PFT */}
+              <col style={{ width: '3.7%' }} />{/* LUNCH */}
+              <col style={{ width: '4%' }} />{/* CON */}
+              <col style={{ width: '2.5%' }} />{/* D */}
+              {/* end cols */}
+              <col style={{ width: '3%' }} />{/* OP */}
+              <col style={{ width: '4%' }} />{/* IN */}
+              <col style={{ width: '3.7%' }} />{/* OUT */}
+            </colgroup>
+          )}
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">#</th>
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Patient Name</th>
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">UHID</th>
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Package</th>
+              <th className={`text-left font-semibold text-gray-700 whitespace-nowrap ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>#</th>
+              <th className={`text-left font-semibold text-gray-700 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 whitespace-nowrap'}`}>Patient Name</th>
+              <th className={`text-left font-semibold text-gray-700 whitespace-nowrap ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>UHID</th>
+              <th className={`text-left font-semibold text-gray-700 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 whitespace-nowrap'}`}>Package</th>
               {TRACKER_COLS.map((col) => (
                 <th
                   key={col.key}
-                  className="text-center px-2 py-3 font-semibold text-gray-700 whitespace-pre-line text-[11px] leading-tight"
+                  className={[
+                    `text-center font-semibold whitespace-pre-line leading-tight ${isFullscreen ? 'px-0.5 py-2 text-[10px]' : 'px-2 py-3 text-[11px]'}`,
+                    col.key === 'ppbs' && anyPpbsYellow ? 'bg-yellow-200 text-yellow-900' : 'text-gray-700',
+                  ].join(' ')}
                 >
                   {col.label}
                 </th>
               ))}
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">OP</th>
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">IN</th>
-              <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">OUT</th>
+              <th className={`text-left font-semibold text-gray-700 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 whitespace-nowrap'}`}>OP</th>
+              <th className={`text-left font-semibold text-gray-700 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 whitespace-nowrap'}`}>IN</th>
+              <th className={`text-left font-semibold text-gray-700 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 whitespace-nowrap'}`}>OUT</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {checkedIn.map((p, idx) => (
+            {pagePatients.map((p, idx) => (
               <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
-                <td className="px-3 py-3">
+                <td className={`text-gray-500 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>{safePage * PATIENTS_PER_PAGE + idx + 1}</td>
+                <td className={isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}>
                   <Link
                     to={`/patient/${p.id}`}
-                    className="font-medium text-primary-700 hover:text-primary-900 hover:underline whitespace-nowrap"
+                    className={`font-medium text-primary-700 hover:text-primary-900 hover:underline ${isFullscreen ? 'wrap-break-word' : 'whitespace-nowrap'}`}
                   >
                     {uppercaseName(p.name)}
                   </Link>
                 </td>
-                <td className="px-3 py-3 text-gray-600 font-mono text-xs">{p.uhid}</td>
-                <td className="px-3 py-3 text-gray-700 max-w-[120px] whitespace-pre-line leading-tight">{wrapPackageName(p.package_name || '—')}</td>
-                {TRACKER_COLS.map((col) => (
-                  <td key={col.key} className="px-2 py-3 text-center text-gray-700">
-                    {col.key === 'consultation' ? '' : getTrackerCellValue(p.pkg, col.key)}
-                  </td>
-                ))}
-                <td className="px-3 py-3" />
-                <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                <td className={`text-gray-600 font-mono text-xs ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>{p.uhid}</td>
+                <td className={`text-gray-700 whitespace-pre-line leading-tight ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 max-w-30'}`}>{wrapPackageName(p.package_name || '—')}</td>
+                {TRACKER_COLS.map((col) => {
+                  if (col.key === 'ppbs') {
+                    const pkgVal = getTrackerCellValue(p.pkg, 'ppbs')
+                    const isEditable = pkgVal.toLowerCase() !== 'x'
+                    const isEditing = editingPpbsId === p.id
+                    const isGlowing = glowingCells[p.id]
+                    const isYellow = !isGlowing && isPpbsAlertWindow(p.ppbs_time, nowIST)
+                    const displayTime = p.ppbs_time ?? ''
+                    return (
+                      <td
+                        key="ppbs"
+                        className={[
+                          `text-center text-gray-700 transition-all duration-300 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`,
+                          isEditable ? 'cursor-pointer select-none' : '',
+                          isGlowing ? 'ring-2 ring-green-400 shadow-[0_0_8px_2px_rgba(74,222,128,0.7)] rounded' : '',
+                          isYellow ? 'bg-yellow-100' : '',
+                        ].join(' ')}
+                        onClick={() => {
+                          if (isEditable && !isEditing) openPpbsEdit(p.id, p.ppbs_time)
+                        }}
+                        title={isEditable ? 'Click to enter PPBS time' : undefined}
+                      >
+                        {isEditing ? (
+                          <input
+                            ref={inputRef}
+                            type="text"
+                            inputMode="numeric"
+                            value={ppbsInputValue}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+                              const formatted = digits.length > 2
+                                ? digits.slice(0, 2) + ':' + digits.slice(2)
+                                : digits
+                              setPpbsInputValue(formatted)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') void savePpbsTime(p.id, ppbsInputValue)
+                              if (e.key === 'Escape') { setEditingPpbsId(null); setPpbsInputValue('') }
+                            }}
+                            onBlur={() => void savePpbsTime(p.id, ppbsInputValue)}
+                            className="w-16 text-center text-xs border border-primary-400 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                            placeholder="1027"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span className={displayTime ? 'font-medium text-primary-700' : 'text-gray-400'}>
+                            {displayTime || pkgVal || ''}
+                          </span>
+                        )}
+                      </td>
+                    )
+                  }
+                  return (
+                    <td key={col.key} className={`text-center text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}>
+                      {col.key === 'consultation' ? '' : getTrackerCellValue(p.pkg, col.key)}
+                    </td>
+                  )
+                })}
+                <td className={isFullscreen ? 'px-1 py-2' : 'px-3 py-3'} />
+                <td className={`text-gray-600 whitespace-nowrap ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>
                   {new Date(p.checked_in_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </td>
-                <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                <td className={`text-gray-600 whitespace-nowrap ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>
                   {p.outTime}
                 </td>
               </tr>

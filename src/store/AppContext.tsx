@@ -61,6 +61,7 @@ import {
   updateDoctorOfflineStatus,
   updatePatientInfoDb,
   updatePatientInternationalDb,
+  updatePatientPpbsTimeDb,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -104,6 +105,7 @@ type Action =
   | { type: 'UPSERT_TASK'; payload: PatientTask }
   | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
   | { type: 'UPDATE_PATIENT_INTERNATIONAL'; payload: { patientId: string; isInternational: boolean } }
+  | { type: 'UPDATE_PATIENT_PPBS_TIME'; payload: { patientId: string; ppbsTime: string | null } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
   | { type: 'REMOVE_TASK'; payload: { taskId: string } }
@@ -308,6 +310,15 @@ function reducer(state: AppState, action: Action): AppState {
             : p
         ),
       }
+    case 'UPDATE_PATIENT_PPBS_TIME':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId
+            ? { ...p, ppbs_time: action.payload.ppbsTime }
+            : p
+        ),
+      }
     case 'UPSERT_PATIENT': {
       const exists = state.patients.some((p) => p.id === action.payload.id)
       return {
@@ -366,6 +377,7 @@ interface AppContextType {
   registerPatient: (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => void
   updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   updatePatientInternational: (patientId: string, isInternational: boolean) => void
+  updatePatientPpbsTime: (patientId: string, ppbsTime: string | null) => Promise<void>
   startTask: (taskId: string) => void
   completeTask: (taskId: string) => void
   skipTask: (taskId: string) => void
@@ -1308,6 +1320,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const updatePatientPpbsTime = useCallback(
+    async (patientId: string, ppbsTime: string | null): Promise<void> => {
+      dispatch({ type: 'UPDATE_PATIENT_PPBS_TIME', payload: { patientId, ppbsTime } })
+      await updatePatientPpbsTimeDb(patientId, ppbsTime)
+    },
+    []
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -1357,6 +1377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteCrossConsultation,
         updatePatientInfo,
         updatePatientInternational,
+        updatePatientPpbsTime,
         // Department online/offline
         toggleDeptOffline,
         isDeptOffline,
