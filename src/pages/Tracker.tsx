@@ -67,7 +67,26 @@ function getTrackerCellValue(pkg: Package | undefined, key: string): string {
   return (pkg[field] as string) || ''
 }
 
-type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; assigned_doctor: DoctorCode; priority: import('@/types').Priority; created_at: string; outTime?: string; ppbs_time: string | null }
+/** Returns the set of group_ids where at least one member has lunch ('-') in their package */
+function getGroupsWithLunch(patients: CheckedInPatient[]): Set<string> {
+  const groups = new Set<string>()
+  for (const p of patients) {
+    if (p.group_id && getTrackerCellValue(p.pkg, 'lunch') === '-') {
+      groups.add(p.group_id)
+    }
+  }
+  return groups
+}
+
+/** Returns '-' if the patient's group has lunch, otherwise returns the patient's package value */
+function getEffectiveLunchValue(patient: CheckedInPatient, groupsWithLunch: Set<string>): string {
+  const val = getTrackerCellValue(patient.pkg, 'lunch')
+  if (val === '-') return '-'
+  if (patient.group_id && groupsWithLunch.has(patient.group_id)) return '-'
+  return val
+}
+
+type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; assigned_doctor: DoctorCode; priority: import('@/types').Priority; created_at: string; outTime?: string; ppbs_time: string | null; group_id: string | null; is_international: boolean }
 
 /** Return HH:MM of the last completed task for a patient, only if ALL tasks are completed */
 function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
@@ -159,6 +178,7 @@ function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'cen
 }
 
 async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
+  const groupsWithLunch = getGroupsWithLunch(checkedIn)
   const wb = new ExcelJS.Workbook()
   const today = new Date()
   const dd = String(today.getDate()).padStart(2, '0')
@@ -223,6 +243,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         ...TRACKER_COLS.map((col) => {
           if (!patient) return ''
           if (col.key === 'consultation') return ''
+          if (col.key === 'lunch') return getEffectiveLunchValue(patient, groupsWithLunch)
           return getTrackerCellValue(patient.pkg, col.key)
         }),
         '', // OP (blank – filled by hand)
@@ -317,6 +338,7 @@ export default function Tracker() {
       }
     })
 
+  const groupsWithLunch = getGroupsWithLunch(checkedIn)
   const totalPages = Math.max(1, Math.ceil(checkedIn.length / PATIENTS_PER_PAGE))
 
   const goToPrev = useCallback(() => setCurrentPage((p) => Math.max(0, p - 1)), [])
@@ -427,7 +449,7 @@ export default function Tracker() {
           </div>
           {/* Lunch count */}
           <div className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-0.5 text-xs font-semibold text-green-800">
-            Lunch: {checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'lunch') === '-').length}
+            Lunch: {checkedIn.filter((p) => getEffectiveLunchValue(p, groupsWithLunch) === '-').length}
           </div>
           {/* Download Excel */}
           <button
@@ -577,7 +599,7 @@ export default function Tracker() {
                   }
                   return (
                     <td key={col.key} className={`text-center text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}>
-                      {col.key === 'consultation' ? '' : getTrackerCellValue(p.pkg, col.key)}
+                      {col.key === 'consultation' ? '' : col.key === 'lunch' ? getEffectiveLunchValue(p, groupsWithLunch) : getTrackerCellValue(p.pkg, col.key)}
                     </td>
                   )
                 })}
