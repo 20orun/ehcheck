@@ -46,7 +46,7 @@ function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
 
 function formatCost(cost: number | null): string {
   if (cost === null || cost === undefined) return '—'
-  return cost.toLocaleString('en-IN')
+  return String(cost)
 }
 
 // ─── Excel Export ────────────────────────────────────
@@ -114,7 +114,7 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
       const hAlign = i === 0 ? 'center' : i === 5 ? 'right' : 'left'
       styleCell(cell, FONT, hAlign)
       if (i === 5 && typeof v === 'number') {
-        cell.numFmt = '#,##0'
+        cell.numFmt = '0'
       }
     })
     row.height = 20

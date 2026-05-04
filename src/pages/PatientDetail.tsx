@@ -323,6 +323,7 @@ export default function PatientDetail() {
                 <>
                   <input
                     type="time"
+                    step="0.001"
                     value={checkInTimeInput}
                     onChange={(e) => setCheckInTimeInput(e.target.value)}
                     className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -332,8 +333,13 @@ export default function PatientDetail() {
                     onClick={() => {
                       if (checkInTimeInput) {
                         const original = new Date(patient.checked_in_at!)
-                        const [h, m] = checkInTimeInput.split(':').map(Number)
-                        original.setHours(h, m, 0, 0)
+                        const timeParts = checkInTimeInput.split(':')
+                        const h = Number(timeParts[0])
+                        const m = Number(timeParts[1])
+                        const secParts = (timeParts[2] ?? '0').split('.')
+                        const s = Number(secParts[0])
+                        const ms = secParts[1] ? Number(secParts[1].padEnd(3, '0').slice(0, 3)) : 0
+                        original.setHours(h, m, s, ms)
                         updateCheckInTime(patient.id, original.toISOString())
                       }
                       setEditingCheckIn(false)
@@ -362,9 +368,11 @@ export default function PatientDetail() {
                   <button
                     onClick={() => {
                       const d = new Date(patient.checked_in_at!)
-                      setCheckInTimeInput(
-                        `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-                      )
+                      const hh = String(d.getHours()).padStart(2, '0')
+                      const mm = String(d.getMinutes()).padStart(2, '0')
+                      const ss = String(d.getSeconds()).padStart(2, '0')
+                      const ms = String(d.getMilliseconds()).padStart(3, '0')
+                      setCheckInTimeInput(`${hh}:${mm}:${ss}.${ms}`)
                       setEditingCheckIn(true)
                     }}
                     className="inline-flex items-center p-0.5 text-gray-400 hover:text-primary-600 transition-colors"
