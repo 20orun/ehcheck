@@ -173,7 +173,11 @@ export default function DailyReport() {
 
   const patients: ReportPatient[] = state.patients
     .filter((p): p is typeof p & { checked_in_at: string } => p.checked_in_at !== null)
-    .sort((a, b) => new Date(a.checked_in_at!).getTime() - new Date(b.checked_in_at!).getTime())
+    .sort((a, b) => {
+      // International patients always come after non-international
+      if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
+      return new Date(a.checked_in_at!).getTime() - new Date(b.checked_in_at!).getTime()
+    })
     .map((p) => {
       const pkg: Package | undefined = state.packages.find((pk) => pk.id === p.package_id)
       return {

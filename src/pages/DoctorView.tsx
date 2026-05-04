@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { TaskStatusIcon, EmptyState } from '@/components/ui'
-import { Search, Wifi, WifiOff, Play, CheckCircle2, Users } from 'lucide-react'
+import { Search, Globe, Wifi, WifiOff, Play, CheckCircle2, Users } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { DOCTORS } from '@/types'
 import { getTaskGroupStatuses } from '@/lib/taskEngine'
@@ -24,7 +24,13 @@ export default function DoctorView() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_PROGRESS' | 'COMPLETED'>('ALL')
 
   const patients = useMemo(() => {
-    return getPatientsWithTasks().filter((p) => p.assigned_doctor === code)
+    return getPatientsWithTasks()
+      .filter((p) => p.assigned_doctor === code)
+      .sort((a, b) => {
+        // International patients always appear after non-international
+        if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
+        return 0
+      })
   }, [getPatientsWithTasks, code])
 
   if (!doctor) return <EmptyState message="Doctor not found" />
@@ -170,6 +176,11 @@ export default function DoctorView() {
                           >
                             {patient.name}
                           </Link>
+                          {patient.is_international && (
+                            <span title="International patient">
+                              <Globe className="w-3.5 h-3.5 text-blue-500" />
+                            </span>
+                          )}
                           {consultDone && (
                             <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
                               Complete

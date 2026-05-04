@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { KPICard, TaskStatusIcon, EmptyState } from '@/components/ui'
-import { Play, CheckCircle2, ArrowUpDown, Search, Wifi, WifiOff, Users, X } from 'lucide-react'
+import { Play, CheckCircle2, ArrowUpDown, Globe, Search, Wifi, WifiOff, Users, X } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { DOCTORS } from '@/types'
 import clsx from 'clsx'
@@ -101,6 +101,8 @@ export default function DepartmentView() {
 
   // Sort
   const sortedQueue = [...filteredQueue].sort((a, b) => {
+    // International patients always come after non-international
+    if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
     switch (sortBy) {
       case 'checkin-asc': {
         const aTime = a.checked_in_at ? new Date(a.checked_in_at).getTime() : Infinity
@@ -268,6 +270,11 @@ export default function DepartmentView() {
                         >
                           {p.name}
                         </Link>
+                        {p.is_international && (
+                          <span title="International patient">
+                            <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                          </span>
+                        )}
                         {isBilling && !p.checked_in_at && (
                           <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
                             Not checked in

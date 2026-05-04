@@ -1,7 +1,7 @@
 import { useApp } from '@/store/AppContext'
 import { KPICard, PriorityBadge, PatientStatusDot } from '@/components/ui'
 import { Link } from 'react-router-dom'
-import { Clock, Search, Users } from 'lucide-react'
+import { Clock, Globe, Search, Users } from 'lucide-react'
 import { useState } from 'react'
 import type { TaskStatus } from '@/types'
 const GROUP_LABELS: Record<string, string> = {
@@ -57,6 +57,8 @@ export default function Dashboard() {
 
   // Sort — stable: tiebreak by name so rows don't jump when task status changes
   const sortedPatients = [...patients].sort((a, b) => {
+    // International patients always appear after non-international
+    if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
     if (sortBy === 'alpha') return a.name.localeCompare(b.name)
     if (sortBy === 'package') {
       const cmp = (a.package_name || '').localeCompare(b.package_name || '')
@@ -257,6 +259,11 @@ export default function Dashboard() {
                         >
                           {p.name}
                         </Link>
+                        {p.is_international && (
+                          <span title="International patient">
+                            <Globe className="inline w-3.5 h-3.5 text-blue-500 ml-1" />
+                          </span>
+                        )}
                         {p.group_id && (
                           <span className={`inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-medium ${palette?.dot}`} title="Checked in as a group">
                             <Users className="w-3 h-3" />

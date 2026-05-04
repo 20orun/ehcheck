@@ -13,6 +13,7 @@ import {
   Search,
   Trash2,
   Users,
+  Globe,
   X,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -175,6 +176,8 @@ export default function CoordinatorPanel() {
 
   // Sort — stable: tiebreak by name so cards don't jump when task status changes
   const sortedPatients = [...filteredPatients].sort((a, b) => {
+    // International patients always appear after non-international
+    if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
     if (sortBy === 'alpha') return a.name.localeCompare(b.name)
     if (sortBy === 'package') {
       const cmp = (a.package_name || '').localeCompare(b.package_name || '')
@@ -388,6 +391,11 @@ export default function CoordinatorPanel() {
                   <Link to={`/patient/${patient.id}`} className="font-semibold text-gray-900 hover:text-primary-600 transition-colors">
                     {patient.name}
                   </Link>
+                  {patient.is_international && (
+                    <span title="International patient">
+                      <Globe className="w-3.5 h-3.5 text-blue-500" />
+                    </span>
+                  )}
                   {patient.checked_in_at && (
                     <span className="text-[10px] text-gray-400 font-mono">
                       &#x2713; {new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
