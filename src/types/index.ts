@@ -92,6 +92,7 @@ export interface Patient {
   package_id: string | null
   assigned_doctor: DoctorCode
   priority: Priority
+  is_international: boolean
   created_at: string
   checked_in_at: string | null
   clinic_date: string // YYYY-MM-DD

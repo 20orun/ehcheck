@@ -85,7 +85,7 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
   let query = supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, created_at, checked_in_at, clinic_date, group_id')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, created_at, checked_in_at, clinic_date, group_id')
     .order('created_at')
   if (clinicDate) {
     query = query.eq('clinic_date', clinicDate)
@@ -100,6 +100,7 @@ export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
     package_id: p.package_id,
     assigned_doctor: (p.assigned_doctor as DoctorCode) ?? null,
     priority: p.priority as Priority,
+    is_international: p.is_international ?? false,
     created_at: p.created_at,
     checked_in_at: p.checked_in_at ?? null,
     clinic_date: p.clinic_date,
@@ -181,11 +182,20 @@ export async function insertPatient(patient: Patient): Promise<void> {
     package_id: patient.package_id,
     assigned_doctor: patient.assigned_doctor,
     priority: patient.priority,
+    is_international: patient.is_international,
     created_at: patient.created_at,
     checked_in_at: patient.checked_in_at,
     clinic_date: patient.clinic_date,
     group_id: patient.group_id ?? null,
   })
+  if (error) throw error
+}
+
+export async function updatePatientInternationalDb(patientId: string, isInternational: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('patients')
+    .update({ is_international: isInternational })
+    .eq('id', patientId)
   if (error) throw error
 }
 

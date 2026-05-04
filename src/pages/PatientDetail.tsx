@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
-import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2, Plus, BookOpen, Clock3 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2, Plus, BookOpen, Clock3, Globe2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
 import type { CrossConsultation, CrossConsultationStatus, TaskGroup, PatientTask } from '@/types'
@@ -84,7 +84,7 @@ function useElapsedTimer(checkedInAt: string | null, completedAt: string | null)
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation, updatePatientInfo } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation, updatePatientInfo, updatePatientInternational } = useApp()
   const patient = getPatientById(id!)
 
   // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
@@ -243,6 +243,11 @@ export default function PatientDetail() {
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <PriorityBadge priority={patient.priority} />
+                {patient.is_international && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                    <Globe2 className="w-3 h-3" /> International
+                  </span>
+                )}
                 {allComplete && (
                   <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
                     Complete
@@ -393,6 +398,21 @@ export default function PatientDetail() {
               </button>
             </div>
           )}
+          <div className="flex items-center gap-1.5 mt-1">
+            <Globe2 className="w-3.5 h-3.5 text-sky-500" />
+            <span className="text-sm text-gray-500">International:</span>
+            <button
+              onClick={() => updatePatientInternational(patient.id, !patient.is_international)}
+              className={clsx(
+                'inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-medium rounded-full border transition-colors',
+                patient.is_international
+                  ? 'bg-sky-100 border-sky-400 text-sky-700 hover:bg-sky-200'
+                  : 'bg-gray-50 border-gray-300 text-gray-500 hover:bg-sky-50 hover:border-sky-300 hover:text-sky-600'
+              )}
+            >
+              {patient.is_international ? 'Yes — click to unmark' : 'No — click to mark as international'}
+            </button>
+          </div>
         </div>
         <button
           onClick={() => {

@@ -60,6 +60,7 @@ import {
   fetchDoctorStatuses,
   updateDoctorOfflineStatus,
   updatePatientInfoDb,
+  updatePatientInternationalDb,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -102,6 +103,7 @@ type Action =
   | { type: 'UPSERT_PATIENT'; payload: Patient }
   | { type: 'UPSERT_TASK'; payload: PatientTask }
   | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
+  | { type: 'UPDATE_PATIENT_INTERNATIONAL'; payload: { patientId: string; isInternational: boolean } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
   | { type: 'REMOVE_TASK'; payload: { taskId: string } }
@@ -297,6 +299,15 @@ function reducer(state: AppState, action: Action): AppState {
             : p
         ),
       }
+    case 'UPDATE_PATIENT_INTERNATIONAL':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId
+            ? { ...p, is_international: action.payload.isInternational }
+            : p
+        ),
+      }
     case 'UPSERT_PATIENT': {
       const exists = state.patients.some((p) => p.id === action.payload.id)
       return {
@@ -354,6 +365,7 @@ interface AppContextType {
   // Actions
   registerPatient: (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => void
   updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
+  updatePatientInternational: (patientId: string, isInternational: boolean) => void
   startTask: (taskId: string) => void
   completeTask: (taskId: string) => void
   skipTask: (taskId: string) => void
@@ -909,6 +921,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         package_id: packageId,
         assigned_doctor: null,
         priority,
+        is_international: false,
         created_at: new Date().toISOString(),
         checked_in_at: null,
         clinic_date: clinicDateStr,
@@ -1285,6 +1298,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const updatePatientInternational = useCallback(
+    (patientId: string, isInternational: boolean) => {
+      dispatch({ type: 'UPDATE_PATIENT_INTERNATIONAL', payload: { patientId, isInternational } })
+      updatePatientInternationalDb(patientId, isInternational).catch((err) =>
+        console.warn('Failed to persist international flag update:', err)
+      )
+    },
+    []
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -1333,6 +1356,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         editCrossConsultation,
         deleteCrossConsultation,
         updatePatientInfo,
+        updatePatientInternational,
         // Department online/offline
         toggleDeptOffline,
         isDeptOffline,

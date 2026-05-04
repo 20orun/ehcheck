@@ -199,7 +199,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         wrapPackageName(patient?.package_name ?? ''),
         ...TRACKER_COLS.map((col) => {
           if (!patient) return ''
-          if (col.key === 'consultation') return patient.assigned_doctor ?? ''
+          if (col.key === 'consultation') return ''
           return getTrackerCellValue(patient.pkg, col.key)
         }),
         '', // OP (blank – filled by hand)
@@ -262,7 +262,12 @@ export default function Tracker() {
 
   const checkedIn: CheckedInPatient[] = state.patients
     .filter((p): p is typeof p & { checked_in_at: string } => p.checked_in_at !== null)
-    .sort((a, b) => new Date(a.checked_in_at).getTime() - new Date(b.checked_in_at).getTime())
+    .sort((a, b) => {
+      // International patients always come after non-international
+      if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
+      // Within each group, sort by check-in time
+      return new Date(a.checked_in_at).getTime() - new Date(b.checked_in_at).getTime()
+    })
     .map((p) => {
       const pkg = state.packages.find((pkg) => pkg.id === p.package_id)
       return {
@@ -284,13 +289,18 @@ export default function Tracker() {
           <h2 className="text-lg font-semibold text-gray-900">Tracker</h2>
           <p className="text-sm text-gray-500">Download the current tracker snapshot including the export date.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void downloadTrackerExcel(checkedIn)}
-          className="inline-flex items-center rounded-md bg-primary-700 px-3 py-2 text-sm font-medium text-white hover:bg-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          Download Excel
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm font-semibold text-green-800">
+            Lunch: {checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'lunch') === '-').length}
+          </div>
+          <button
+            type="button"
+            onClick={() => void downloadTrackerExcel(checkedIn)}
+            className="inline-flex items-center rounded-md bg-primary-700 px-3 py-2 text-sm font-medium text-white hover:bg-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            Download Excel
+          </button>
+        </div>
       </div>
       <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
@@ -328,8 +338,8 @@ export default function Tracker() {
                 <td className="px-3 py-3 text-gray-600 font-mono text-xs">{p.uhid}</td>
                 <td className="px-3 py-3 text-gray-700 max-w-[120px] whitespace-pre-line leading-tight">{wrapPackageName(p.package_name || '—')}</td>
                 {TRACKER_COLS.map((col) => (
-                  <td key={col.key} className={`px-2 py-3 text-center ${col.key === 'consultation' ? 'font-bold text-primary-700' : 'text-gray-700'}`}>
-                    {col.key === 'consultation' ? (p.assigned_doctor ?? '') : getTrackerCellValue(p.pkg, col.key)}
+                  <td key={col.key} className="px-2 py-3 text-center text-gray-700">
+                    {col.key === 'consultation' ? '' : getTrackerCellValue(p.pkg, col.key)}
                   </td>
                 ))}
                 <td className="px-3 py-3" />
