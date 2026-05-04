@@ -67,7 +67,7 @@ function getTrackerCellValue(pkg: Package | undefined, key: string): string {
   return (pkg[field] as string) || ''
 }
 
-type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; assigned_doctor: DoctorCode; priority: import('@/types').Priority; created_at: string; outTime?: string }
+type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; assigned_doctor: DoctorCode; priority: import('@/types').Priority; created_at: string; outTime?: string; ppbs_time: string | null }
 
 /** Return HH:MM of the last completed task for a patient, only if ALL tasks are completed */
 function getOutTime(patientId: string, patientTasks: PatientTask[]): string {

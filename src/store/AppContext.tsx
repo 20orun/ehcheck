@@ -938,6 +938,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         checked_in_at: null,
         clinic_date: clinicDateStr,
         group_id: null,
+        ppbs_time: null,
       }
       let tasks: PatientTask[]
       if (packageId) {
