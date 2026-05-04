@@ -40,6 +40,7 @@ import {
   skipTaskInDb,
   updatePatientPriority as dbUpdatePatientPriority,
   checkInPatientDb,
+  updatePatientGroupDb,
   undoCheckInDb,
   deletePatientDb,
   cancelTaskDb,
@@ -82,6 +83,7 @@ type Action =
   | { type: 'SET_PRIORITY'; payload: { patientId: string; priority: Priority } }
   | { type: 'CHECK_IN'; payload: { patientId: string; timestamp: string; groupId?: string } }
   | { type: 'UNDO_CHECK_IN'; payload: { patientId: string } }
+  | { type: 'UPDATE_GROUP'; payload: { patientId: string; groupId: string } }
   | { type: 'DELETE_PATIENT'; payload: { patientId: string } }
   | { type: 'CANCEL_TASK'; payload: { taskId: string } }
   | { type: 'UPDATE_TASK_TIMES'; payload: { taskId: string; startedAt: string | null; completedAt: string | null } }
@@ -161,6 +163,13 @@ function reducer(state: AppState, action: Action): AppState {
           p.id === action.payload.patientId
             ? { ...p, checked_in_at: action.payload.timestamp, ...(action.payload.groupId ? { group_id: action.payload.groupId } : {}) }
             : p
+        ),
+      }
+    case 'UPDATE_GROUP':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId ? { ...p, group_id: action.payload.groupId } : p
         ),
       }
     case 'UNDO_CHECK_IN':
@@ -355,6 +364,7 @@ interface AppContextType {
   setPriority: (patientId: string, priority: Priority) => void
   checkInPatient: (patientId: string, groupId?: string) => void
   checkInGroup: (patientIds: string[]) => void
+  assignGroup: (patientIds: string[]) => void
   undoCheckIn: (patientId: string) => void
   updateCheckInTime: (patientId: string, timestamp: string) => void
   updateTaskTimes: (taskId: string, startedAt: string | null, completedAt: string | null) => void
@@ -1032,6 +1042,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [selectedDate])
 
+  const assignGroup = useCallback((patientIds: string[]) => {
+    if (patientIds.length < 2) return
+    const groupId = `grp-${crypto.randomUUID()}`
+    patientIds.forEach((patientId) => {
+      dispatch({ type: 'UPDATE_GROUP', payload: { patientId, groupId } })
+      updatePatientGroupDb(patientId, groupId).catch((err) =>
+        console.warn('Failed to persist group assignment:', err)
+      )
+    })
+  }, [])
+
   const undoCheckIn = useCallback((patientId: string) => {
     if (selectedDate !== getTodayStrNow()) return
     dispatch({ type: 'UNDO_CHECK_IN', payload: { patientId } })
@@ -1294,6 +1315,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPriority,
         checkInPatient,
         checkInGroup,
+        assignGroup,
         undoCheckIn,
         updateCheckInTime,
         updateTaskTimes,

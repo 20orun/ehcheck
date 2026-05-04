@@ -68,6 +68,7 @@ export default function CoordinatorPanel() {
     getNextTask,
     checkInPatient,
     checkInGroup,
+    assignGroup,
     undoCheckIn,
     updatePatientPackage,
     updatePatientInfo,
@@ -144,6 +145,15 @@ export default function CoordinatorPanel() {
       .map((p) => p.id)
     if (toCheckIn.length < 2) return
     checkInGroup(toCheckIn)
+    setSelectedIds(new Set())
+  }
+
+  function handleAssignGroup() {
+    const toGroup = sortedPatients
+      .filter((p) => selectedIds.has(p.id) && !!p.checked_in_at)
+      .map((p) => p.id)
+    if (toGroup.length < 2) return
+    assignGroup(toGroup)
     setSelectedIds(new Set())
   }
 
@@ -287,6 +297,15 @@ export default function CoordinatorPanel() {
               className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
             >
               <Users className="w-3.5 h-3.5" /> Check In Together
+            </button>
+          )}
+          {/* Update Group – when 2+ already-checked-in patients are selected */}
+          {sortedPatients.filter((p) => selectedIds.has(p.id) && !!p.checked_in_at).length >= 2 && (
+            <button
+              onClick={handleAssignGroup}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+            >
+              <Users className="w-3.5 h-3.5" /> Update Group
             </button>
           )}
           <button
