@@ -86,7 +86,7 @@ type Action =
   | { type: 'SET_PRIORITY'; payload: { patientId: string; priority: Priority } }
   | { type: 'CHECK_IN'; payload: { patientId: string; timestamp: string; groupId?: string } }
   | { type: 'UNDO_CHECK_IN'; payload: { patientId: string } }
-  | { type: 'UPDATE_GROUP'; payload: { patientId: string; groupId: string } }
+  | { type: 'UPDATE_GROUP'; payload: { patientId: string; groupId: string | null } }
   | { type: 'DELETE_PATIENT'; payload: { patientId: string } }
   | { type: 'CANCEL_TASK'; payload: { taskId: string } }
   | { type: 'UPDATE_TASK_TIMES'; payload: { taskId: string; startedAt: string | null; completedAt: string | null } }
@@ -175,7 +175,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         patients: state.patients.map((p) =>
-          p.id === action.payload.patientId ? { ...p, group_id: action.payload.groupId } : p
+          p.id === action.payload.patientId ? { ...p, group_id: action.payload.groupId ?? null } : p
         ),
       }
     case 'UNDO_CHECK_IN':
@@ -402,6 +402,8 @@ interface AppContextType {
   getNextTask: (patientId: string) => PatientTask | null
   // Actions
   registerPatient: (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => void
+  checkInNewPatient: (name: string) => void
+  updatePatientGroup: (patientId: string, groupId: string | null) => void
   updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   updatePatientInternational: (patientId: string, isInternational: boolean) => void
   updatePatientPpbsTime: (patientId: string, ppbsTime: string | null) => Promise<void>
@@ -1016,6 +1018,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [state.packageSteps, selectedDate]
   )
 
+  const checkInNewPatient = useCallback((name: string) => {
+    if (selectedDate < getTodayStrNow()) return
+    const patientId = `pat-${crypto.randomUUID()}`
+    const ts = new Date().toISOString()
+    const patient: Patient = {
+      id: patientId,
+      name: name.trim(),
+      uhid: '',
+      phone: null,
+      package_id: null,
+      assigned_doctor: null,
+      priority: 'NORMAL',
+      is_international: false,
+      created_at: ts,
+      checked_in_at: ts,
+      clinic_date: selectedDate,
+      group_id: null,
+      ppbs_time: null,
+      tracker_cell_states: {},
+    }
+    const tasks: PatientTask[] = [{
+      id: `ptask-${crypto.randomUUID()}-billing`,
+      patient_id: patientId,
+      step_id: null,
+      department_id: 'dept-reg',
+      task_group: 'BILLING' as TaskGroup,
+      status: 'NOT_STARTED' as TaskStatus,
+      is_mandatory: true,
+      skipped: false,
+      started_at: null,
+      completed_at: null,
+      step_order: 1,
+      step_name: 'Billing',
+    }]
+    dispatch({ type: 'ADD_PATIENT', payload: { patient, tasks } })
+    dbInsertPatient(patient)
+      .then(() => dbInsertPatientTasks(tasks))
+      .catch((err) => console.warn('Failed to persist quick check-in:', err))
+  }, [selectedDate])
+
+  const updatePatientGroup = useCallback((patientId: string, groupId: string | null) => {
+    dispatch({ type: 'UPDATE_GROUP', payload: { patientId, groupId } })
+    updatePatientGroupDb(patientId, groupId).catch((err) =>
+      console.warn('Failed to persist group update:', err)
+    )
+  }, [])
+
   const startTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
     const task = state.patientTasks.find((t) => t.id === taskId)
@@ -1388,6 +1437,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         getDepartmentStats,
         getNextTask,
         registerPatient,
+        checkInNewPatient,
+        updatePatientGroup,
         startTask,
         completeTask,
         skipTask,

@@ -288,7 +288,7 @@ export async function checkInPatientDb(patientId: string, timestamp: string, gro
   if (error) throw error
 }
 
-export async function updatePatientGroupDb(patientId: string, groupId: string): Promise<void> {
+export async function updatePatientGroupDb(patientId: string, groupId: string | null): Promise<void> {
   const { error } = await supabase.from('patients').update({ group_id: groupId }).eq('id', patientId)
   if (error) throw error
 }

@@ -16,6 +16,7 @@ import DailyReport from '@/pages/DailyReport'
 import CrossConsultations from '@/pages/CrossConsultations'
 import DepartmentDashboard from '@/pages/DepartmentDashboard'
 import Accounts from '@/pages/Accounts'
+import CheckIn from '@/pages/CheckIn'
 import Auth from '@/pages/Auth'
 
 // ─── Role-aware route guard ───────────────────────────
@@ -141,6 +142,11 @@ function AppRoutes() {
           {/* Accounts – admin only */}
           <Route path="/accounts"
             element={<Guard allowed={isAdmin}><Accounts /></Guard>}
+          />
+
+          {/* Check In – admin + coordinator only */}
+          <Route path="/checkin"
+            element={<Guard allowed={fullAccess}><CheckIn /></Guard>}
           />
 
           {/* Catch-all: redirect to role's home */}

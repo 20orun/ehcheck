@@ -20,6 +20,7 @@ import {
   Stethoscope,
   BookOpen,
   UsersRound,
+  LogIn,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/store/AppContext'
@@ -29,6 +30,7 @@ import clsx from 'clsx'
 
 const ALL_NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, hideForCoordinator: false },
+  { to: '/checkin', icon: LogIn, label: 'Check In', adminOnly: false, hideForCoordinator: false },
   { to: '/departments', icon: Building2, label: 'Departments', adminOnly: false, hideForCoordinator: false },
   { to: '/coordinator', icon: Sliders, label: 'Coordinator', adminOnly: false, hideForCoordinator: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', adminOnly: false, hideForCoordinator: true },
