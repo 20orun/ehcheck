@@ -48,6 +48,9 @@ export default function CheckIn() {
   const [editName, setEditName] = useState('')
   const [editTime, setEditTime] = useState('')
 
+  // Confirm-delete state
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
   // All checked-in patients for today, sorted ascending (stable serial numbers)
   const checkedInPatients = useMemo(() => {
     return state.patients
@@ -170,12 +173,62 @@ export default function CheckIn() {
 
   function handleDelete(patientId: string, e: React.MouseEvent) {
     e.stopPropagation()
-    deletePatient(patientId)
-    setSelectedIds((prev) => { const next = new Set(prev); next.delete(patientId); return next })
+    setPendingDeleteId(patientId)
   }
+
+  function confirmDelete() {
+    if (!pendingDeleteId) return
+    deletePatient(pendingDeleteId)
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(pendingDeleteId); return next })
+    setPendingDeleteId(null)
+  }
+
+  // Name to show in confirm dialog
+  const pendingDeleteName = pendingDeleteId
+    ? (state.patients.find((p) => p.id === pendingDeleteId)?.name ?? 'this patient')
+    : ''
 
   return (
     <div className="p-3 sm:p-6 max-w-4xl mx-auto space-y-6 sm:space-y-8">
+      {/* Confirm Delete Modal */}
+      {pendingDeleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setPendingDeleteId(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">Remove patient?</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  <span className="font-medium text-gray-700">{pendingDeleteName}</span> will be permanently removed from the check-in list.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setPendingDeleteId(null)}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Check In</h1>
