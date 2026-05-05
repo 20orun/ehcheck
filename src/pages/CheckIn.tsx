@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useApp } from '@/store/AppContext'
-import { LogIn, X, Check, Users, Pencil, Trash2, Save, ArrowUp, ArrowDown, Sparkles } from 'lucide-react'
+import { LogIn, X, Check, Users, Pencil, Trash2, Save, ArrowUp, ArrowDown } from 'lucide-react'
 import clsx from 'clsx'
 
 function formatISTTime(iso: string): string {
@@ -244,7 +244,7 @@ export default function CheckIn() {
           >
             <div className="flex items-start gap-3">
               <div className="shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-emerald-600" />
+                <span className="text-base font-bold text-emerald-700">N</span>
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900">{newPatientModalPatient.name}</p>
@@ -444,11 +444,6 @@ export default function CheckIn() {
                       className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
                     >
                       <span className="font-medium text-sm text-primary-700 hover:underline truncate">{patient.name}</span>
-                      {patient.is_new && (
-                        <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                          <Sparkles className="w-2.5 h-2.5" />NEW
-                        </span>
-                      )}
                     </button>
                   )}
 
@@ -466,6 +461,15 @@ export default function CheckIn() {
                       {formatISTTime(patient.checked_in_at!)}
                     </span>
                   )}
+
+                  {/* N badge — shown when patient is new */}
+                  <span className="w-5 shrink-0 flex items-center justify-center">
+                    {patient.is_new && (
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">
+                        N
+                      </span>
+                    )}
+                  </span>
 
                   {/* Package */}
                   <span className="text-xs text-gray-400 shrink-0 hidden sm:block w-36 truncate text-right">

@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { KPICard, TaskStatusIcon, EmptyState } from '@/components/ui'
-import { Play, CheckCircle2, ArrowUpDown, Globe, Search, Wifi, WifiOff, Users, X, Pencil, Sparkles } from 'lucide-react'
+import { Play, CheckCircle2, ArrowUpDown, Globe, Search, Wifi, WifiOff, Users, X, Pencil } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import clsx from 'clsx'
 
@@ -291,8 +291,8 @@ export default function DepartmentView() {
                           {p.name}
                         </Link>
                         {p.is_new && (
-                          <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                            <Sparkles className="w-2.5 h-2.5" />NEW
+                          <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">
+                            N
                           </span>
                         )}
                         {p.is_international && (
