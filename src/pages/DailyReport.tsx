@@ -146,7 +146,6 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
 
 // ─── Clipboard ───────────────────────────────────────
 function copyToClipboard(patients: ReportPatient[]) {
-  const header = COL_HEADERS.join('\t')
   const rows = patients.map((p, idx) =>
     [
       idx + 1,
@@ -160,7 +159,7 @@ function copyToClipboard(patients: ReportPatient[]) {
     ].join('\t')
   )
   const totalRow = `TOTAL PATIENTS:\t${patients.length}`
-  const text = [header, ...rows, totalRow].join('\n')
+  const text = [...rows, totalRow].join('\n')
   navigator.clipboard.writeText(text)
 }
 
@@ -189,7 +188,7 @@ export default function DailyReport() {
         doctor_name: getDoctorName(p.assigned_doctor),
         package_cost: pkg?.price ?? null,
         in_time: new Date(p.checked_in_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-        out_time: getOutTime(p.id, state.patientTasks),
+        out_time: p.tracker_cell_states?.['out'] || getOutTime(p.id, state.patientTasks),
       }
     })
 

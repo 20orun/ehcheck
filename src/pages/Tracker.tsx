@@ -248,7 +248,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         }),
         '', // OP (blank – filled by hand)
         patient ? new Date(patient.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
-        patient?.outTime ?? '', // OUT
+        patient?.tracker_cell_states?.['out'] ?? patient?.outTime ?? '', // OUT
       ]
 
       vals.forEach((v, i) => {
@@ -309,6 +309,10 @@ export default function Tracker() {
   const [ppbsInputValue, setPpbsInputValue] = useState('')
   const [glowingCells, setGlowingCells] = useState<Record<string, boolean>>({})
   const [nowIST, setNowIST] = useState(getISTTimeString)
+  // ─── OUT inline-edit state ────────────────────────
+  const [editingOutId, setEditingOutId] = useState<string | null>(null)
+  const [outInputValue, setOutInputValue] = useState('')
+  const outInputRef = useRef<HTMLInputElement>(null)
   // ─── Pagination & fullscreen ──────────────────────
   const [currentPage, setCurrentPage] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -375,6 +379,23 @@ export default function Tracker() {
     setPpbsInputValue(currentTime ?? '')
     // Focus the input after render
     setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
+
+  const saveOutTime = useCallback(async (patientId: string, value: string, currentStates: Record<string, string>) => {
+    const trimmed = value.trim()
+    setEditingOutId(null)
+    setOutInputValue('')
+    try {
+      await updateTrackerCellState(patientId, 'out', trimmed || null, currentStates)
+    } catch (err) {
+      console.warn('Failed to save out time:', err)
+    }
+  }, [updateTrackerCellState])
+
+  const openOutEdit = useCallback((patientId: string, currentTime: string) => {
+    setEditingOutId(patientId)
+    setOutInputValue(currentTime)
+    setTimeout(() => outInputRef.current?.focus(), 0)
   }, [])
 
   // ─── Keyboard navigation ──────────────────────────
@@ -760,8 +781,45 @@ export default function Tracker() {
                 <td className={`text-gray-600 whitespace-nowrap ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>
                   {new Date(p.checked_in_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </td>
-                <td className={`text-gray-600 whitespace-nowrap ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>
-                  {p.outTime}
+                <td
+                  className={`whitespace-nowrap cursor-pointer select-none ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}
+                  onClick={() => {
+                    if (editingOutId !== p.id) {
+                      void updateTrackerCellState(p.id, 'out', getISTTimeString(), p.tracker_cell_states)
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    if (editingOutId !== p.id) {
+                      openOutEdit(p.id, p.tracker_cell_states['out'] ?? p.outTime ?? '')
+                    }
+                  }}
+                  title="Click to stamp current time · Double-click to edit"
+                >
+                  {editingOutId === p.id ? (
+                    <input
+                      ref={outInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      value={outInputValue}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+                        const formatted = digits.length > 2 ? digits.slice(0, 2) + ':' + digits.slice(2) : digits
+                        setOutInputValue(formatted)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void saveOutTime(p.id, outInputValue, p.tracker_cell_states)
+                        if (e.key === 'Escape') { setEditingOutId(null); setOutInputValue('') }
+                      }}
+                      onBlur={() => void saveOutTime(p.id, outInputValue, p.tracker_cell_states)}
+                      className="w-14 text-center text-xs border border-primary-400 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      placeholder="1430"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className={(p.tracker_cell_states['out'] ?? p.outTime) ? 'font-medium text-primary-700' : 'text-gray-400 text-xs'}>
+                      {(p.tracker_cell_states['out'] ?? p.outTime) || '—'}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

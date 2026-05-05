@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
-import { LogIn, X, Check, Users, Pencil, Trash2, Save, ArrowUp, ArrowDown } from 'lucide-react'
+import { LogIn, X, Check, Users, Pencil, Trash2, Save, ArrowUp, ArrowDown, Sparkles } from 'lucide-react'
 import clsx from 'clsx'
 
 function formatISTTime(iso: string): string {
@@ -37,7 +36,7 @@ const GROUP_COLORS = [
 ]
 
 export default function CheckIn() {
-  const { state, checkInNewPatient, assignGroup, updatePatientGroup, updatePatientInfo, updateCheckInTime, deletePatient } = useApp()
+  const { state, checkInNewPatient, assignGroup, updatePatientGroup, updatePatientInfo, updateCheckInTime, deletePatient, updatePatientNew } = useApp()
 
   const [name, setName] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -50,6 +49,10 @@ export default function CheckIn() {
 
   // Confirm-delete state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
+  // New patient modal state
+  const [newPatientModalId, setNewPatientModalId] = useState<string | null>(null)
+  const newPatientModalPatient = newPatientModalId ? state.patients.find((p) => p.id === newPatientModalId) : null
 
   // All checked-in patients for today, sorted ascending (stable serial numbers)
   const checkedInPatients = useMemo(() => {
@@ -229,6 +232,56 @@ export default function CheckIn() {
         </div>
       )}
 
+      {/* Mark as New Modal */}
+      {newPatientModalPatient && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setNewPatientModalId(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-white rounded-2xl shadow-xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-900">{newPatientModalPatient.name}</p>
+                <p className="text-sm text-gray-500 mt-0.5">Mark this patient as a first-time visitor?</p>
+              </div>
+              <button onClick={() => setNewPatientModalId(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => { updatePatientNew(newPatientModalPatient.id, false); setNewPatientModalId(null) }}
+                className={clsx(
+                  'flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors',
+                  !newPatientModalPatient.is_new
+                    ? 'border-gray-400 bg-gray-100 text-gray-800'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                )}
+              >
+                Not New
+              </button>
+              <button
+                onClick={() => { updatePatientNew(newPatientModalPatient.id, true); setNewPatientModalId(null) }}
+                className={clsx(
+                  'flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  newPatientModalPatient.is_new
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                )}
+              >
+                {newPatientModalPatient.is_new ? '✓ Marked as New' : 'Mark as New'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Check In</h1>
@@ -385,13 +438,18 @@ export default function CheckIn() {
                       className="flex-1 min-w-0 w-0 px-2 py-0.5 text-sm border border-primary-400 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white"
                     />
                   ) : (
-                    <Link
-                      to={`/patient/${patient.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex-1 min-w-0 font-medium text-sm text-primary-700 hover:underline truncate"
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setNewPatientModalId(patient.id) }}
+                      className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
                     >
-                      {patient.name}
-                    </Link>
+                      <span className="font-medium text-sm text-primary-700 hover:underline truncate">{patient.name}</span>
+                      {patient.is_new && (
+                        <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          <Sparkles className="w-2.5 h-2.5" />NEW
+                        </span>
+                      )}
+                    </button>
                   )}
 
                   {/* Check-in time — editable or display */}

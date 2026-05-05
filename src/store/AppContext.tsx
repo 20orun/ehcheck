@@ -63,6 +63,7 @@ import {
   updatePatientInternationalDb,
   updatePatientPpbsTimeDb,
   updateTrackerCellStateDb,
+  updatePatientNewDb,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -107,6 +108,7 @@ type Action =
   | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
   | { type: 'UPDATE_PATIENT_INTERNATIONAL'; payload: { patientId: string; isInternational: boolean } }
   | { type: 'UPDATE_PATIENT_PPBS_TIME'; payload: { patientId: string; ppbsTime: string | null } }
+  | { type: 'UPDATE_PATIENT_NEW'; payload: { patientId: string; isNew: boolean } }
   | { type: 'UPDATE_TRACKER_CELL_STATE'; payload: { patientId: string; cellKey: string; value: string | null } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
@@ -321,6 +323,15 @@ function reducer(state: AppState, action: Action): AppState {
             : p
         ),
       }
+    case 'UPDATE_PATIENT_NEW':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId
+            ? { ...p, is_new: action.payload.isNew }
+            : p
+        ),
+      }
     case 'UPDATE_TRACKER_CELL_STATE': {
       const { patientId, cellKey, value } = action.payload
       return {
@@ -406,6 +417,7 @@ interface AppContextType {
   updatePatientGroup: (patientId: string, groupId: string | null) => void
   updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   updatePatientInternational: (patientId: string, isInternational: boolean) => void
+  updatePatientNew: (patientId: string, isNew: boolean) => void
   updatePatientPpbsTime: (patientId: string, ppbsTime: string | null) => Promise<void>
   updateTrackerCellState: (patientId: string, cellKey: string, value: string | null, currentStates: Record<string, string>) => Promise<void>
   startTask: (taskId: string) => void
@@ -972,6 +984,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         group_id: null,
         ppbs_time: null,
         tracker_cell_states: {},
+        is_new: false,
       }
       let tasks: PatientTask[]
       if (packageId) {
@@ -1037,6 +1050,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       group_id: null,
       ppbs_time: null,
       tracker_cell_states: {},
+      is_new: false,
     }
     const tasks: PatientTask[] = [{
       id: `ptask-${crypto.randomUUID()}-billing`,
@@ -1401,6 +1415,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const updatePatientNew = useCallback(
+    (patientId: string, isNew: boolean) => {
+      dispatch({ type: 'UPDATE_PATIENT_NEW', payload: { patientId, isNew } })
+      updatePatientNewDb(patientId, isNew).catch((err) =>
+        console.warn('Failed to persist new patient flag update:', err)
+      )
+    },
+    []
+  )
+
   const updatePatientPpbsTime = useCallback(
     async (patientId: string, ppbsTime: string | null): Promise<void> => {
       dispatch({ type: 'UPDATE_PATIENT_PPBS_TIME', payload: { patientId, ppbsTime } })
@@ -1468,6 +1492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteCrossConsultation,
         updatePatientInfo,
         updatePatientInternational,
+        updatePatientNew,
         updatePatientPpbsTime,
         updateTrackerCellState,
         // Department online/offline
