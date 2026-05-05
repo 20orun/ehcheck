@@ -175,7 +175,7 @@ export default function CheckIn() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
+    <div className="p-3 sm:p-6 max-w-4xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Check In</h1>
@@ -187,7 +187,7 @@ export default function CheckIn() {
       {/* Quick Check-In Form */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">New Check-In</h2>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             value={name}
@@ -199,7 +199,7 @@ export default function CheckIn() {
           <button
             onClick={handleCheckIn}
             disabled={!name.trim()}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <LogIn className="w-4 h-4" />
             Check In
@@ -235,7 +235,7 @@ export default function CheckIn() {
         ) : (
           <div className="divide-y divide-gray-50">
             {/* Column header */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100 select-none">
+            <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-50 border-b border-gray-100 select-none">
               <div className="w-4 shrink-0" />
               <span className="w-5 shrink-0" />
               <span className="flex-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</span>
@@ -266,7 +266,7 @@ export default function CheckIn() {
                   key={patient.id}
                   onClick={() => toggleSelect(patient.id)}
                   className={clsx(
-                    'flex items-center gap-2 px-4 py-3 transition-colors border-l-4',
+                    'flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 sm:py-3 transition-colors border-l-4',
                     !isEditing && 'cursor-pointer select-none',
                     isSelected ? 'bg-primary-50' : 'hover:bg-gray-50',
                     groupInfo ? groupInfo.color.border : 'border-l-transparent'
@@ -292,27 +292,30 @@ export default function CheckIn() {
                         <button
                           onClick={handleAddAsGroup}
                           className="flex items-center gap-1 px-2 py-1 rounded bg-primary-600 text-white text-xs font-medium hover:bg-primary-700 transition-colors whitespace-nowrap"
+                          title="Add as Group"
                         >
                           <Users className="w-3 h-3" />
-                          Add as Group
+                          <span className="hidden sm:inline">Add as Group</span>
                         </button>
                       )}
                       {showUpdateGroup && (
                         <button
                           onClick={handleUpdateGroup}
                           className="flex items-center gap-1 px-2 py-1 rounded bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 transition-colors whitespace-nowrap"
+                          title="Update Group"
                         >
                           <Users className="w-3 h-3" />
-                          Update Group
+                          <span className="hidden sm:inline">Update Group</span>
                         </button>
                       )}
                       {showRemoveGroup && (
                         <button
                           onClick={handleRemoveGroup}
                           className="flex items-center gap-1 px-2 py-1 rounded bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors whitespace-nowrap"
+                          title="Remove Group"
                         >
                           <Users className="w-3 h-3" />
-                          Remove Group
+                          <span className="hidden sm:inline">Remove Group</span>
                         </button>
                       )}
                     </div>
@@ -326,7 +329,7 @@ export default function CheckIn() {
                       onChange={(e) => setEditName(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => { if (e.key === 'Escape') cancelEdit(e as unknown as React.MouseEvent) }}
-                      className="flex-1 min-w-0 px-2 py-0.5 text-sm border border-primary-400 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white"
+                      className="flex-1 min-w-0 w-0 px-2 py-0.5 text-sm border border-primary-400 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white"
                     />
                   ) : (
                     <Link
@@ -344,8 +347,8 @@ export default function CheckIn() {
                       value={editTime}
                       onChange={(e) => setEditTime(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
-                      placeholder="HH:MM or HH:MM:SS.mmm"
-                      className="w-36 px-2 py-0.5 text-xs border border-primary-400 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white tabular-nums"
+                      placeholder="HH:MM:SS.mmm"
+                      className="w-24 sm:w-36 shrink-0 px-2 py-0.5 text-xs border border-primary-400 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white tabular-nums"
                     />
                   ) : (
                     <span className="text-xs text-gray-500 shrink-0 tabular-nums w-10 text-right">

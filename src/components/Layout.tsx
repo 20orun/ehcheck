@@ -56,13 +56,15 @@ export default function Layout() {
   const [nowIST, setNowIST] = useState(getISTNow)
   const accountRef = useRef<HTMLDivElement>(null)
   const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
-  const { user, signOut, isAdmin, isCoordinator, isDepartment, isDoctor, departmentId, doctorCode, role } = useAuth()
+  const { user, signOut, isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode, role } = useAuth()
   const location = useLocation()
 
   // Build the visible nav items based on the current role
-  const navItems = (isAdmin || isCoordinator)
-    ? ALL_NAV_ITEMS.filter((item) => !(isCoordinator && (item.hideForCoordinator || item.adminOnly)))
-    : []
+  const navItems = isCheckIn
+    ? ALL_NAV_ITEMS.filter((item) => item.to === '/checkin')
+    : (isAdmin || isCoordinator)
+      ? ALL_NAV_ITEMS.filter((item) => !(isCoordinator && (item.hideForCoordinator || item.adminOnly)))
+      : []
 
   // For department/doctor roles only show their specific entry in the sidebar sections
   const visibleDepartments = (isAdmin || isCoordinator)

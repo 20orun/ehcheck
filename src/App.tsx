@@ -22,15 +22,16 @@ import Auth from '@/pages/Auth'
 // ─── Role-aware route guard ───────────────────────────
 // Renders children if allowed, otherwise redirects to the role's home.
 function Guard({ allowed, children }: { allowed: boolean; children: React.ReactNode }) {
-  const { isDepartment, isDoctor, departmentId, doctorCode } = useAuth()
+  const { isCheckIn, isDepartment, isDoctor, departmentId, doctorCode } = useAuth()
   if (allowed) return <>{children}</>
+  if (isCheckIn) return <Navigate to="/checkin" replace />
   if (isDepartment && departmentId) return <Navigate to={`/department/${departmentId}`} replace />
   if (isDoctor && doctorCode) return <Navigate to={`/doctor/${doctorCode}`} replace />
   return <Navigate to="/" replace />
 }
 
 function AppRoutes() {
-  const { user, loading, isAdmin, isCoordinator, isDepartment, isDoctor, departmentId, doctorCode } = useAuth()
+  const { user, loading, isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode } = useAuth()
 
   // Only block on the very first load (session check). Never block on roleLoading —
   // doing so would unmount AppProvider and wipe all page state on every background
@@ -58,11 +59,13 @@ function AppRoutes() {
   const fullAccess = isAdmin || isCoordinator
 
   // Default landing path after login
-  const homePath = isDepartment && departmentId
-    ? `/department/${departmentId}`
-    : isDoctor && doctorCode
-      ? `/doctor/${doctorCode}`
-      : '/'
+  const homePath = isCheckIn
+    ? '/checkin'
+    : isDepartment && departmentId
+      ? `/department/${departmentId}`
+      : isDoctor && doctorCode
+        ? `/doctor/${doctorCode}`
+        : '/'
 
   return (
     <AppProvider>
@@ -144,9 +147,9 @@ function AppRoutes() {
             element={<Guard allowed={isAdmin}><Accounts /></Guard>}
           />
 
-          {/* Check In – admin + coordinator only */}
+          {/* Check In – admin + coordinator + checkin role */}
           <Route path="/checkin"
-            element={<Guard allowed={fullAccess}><CheckIn /></Guard>}
+            element={<Guard allowed={fullAccess || isCheckIn}><CheckIn /></Guard>}
           />
 
           {/* Catch-all: redirect to role's home */}

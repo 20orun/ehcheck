@@ -12,6 +12,7 @@ interface AuthContextType {
   roleLoading: boolean
   isAdmin: boolean
   isCoordinator: boolean
+  isCheckIn: boolean
   isDepartment: boolean
   isDoctor: boolean
   departmentId: string | null
@@ -83,13 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null)
   }
 
-  const { isAdmin, isCoordinator, isDepartment, isDoctor, departmentId, doctorCode } = parseRole(role)
+  const { isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode } = parseRole(role)
 
   return (
     <AuthContext.Provider value={{
       user, session, loading,
       role, roleLoading,
-      isAdmin, isCoordinator, isDepartment, isDoctor, departmentId, doctorCode,
+      isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode,
       signUp, signIn, signOut,
     }}>
       {children}
