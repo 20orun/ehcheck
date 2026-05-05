@@ -291,9 +291,6 @@ export default function DailyReport() {
           return acc
         }, {})
         const entries = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1])
-        const maleCount = patients.filter((p) => inferGenderFromPackage(p.package_name) === 'Male').length
-        const femaleCount = patients.filter((p) => inferGenderFromPackage(p.package_name) === 'Female').length
-        const otherCount = patients.length - maleCount - femaleCount
         return (
           <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
             <table className="text-sm">
@@ -316,20 +313,6 @@ export default function DailyReport() {
                   <td className="px-3 py-2 font-semibold text-gray-900">Total</td>
                   <td className="px-3 py-2 text-center font-semibold text-gray-900">{patients.length}</td>
                 </tr>
-                <tr className="border-t border-gray-100">
-                  <td className="px-3 py-2 text-gray-600">Male</td>
-                  <td className="px-3 py-2 text-center text-gray-900">{maleCount}</td>
-                </tr>
-                <tr className="border-t border-gray-100">
-                  <td className="px-3 py-2 text-gray-600">Female</td>
-                  <td className="px-3 py-2 text-center text-gray-900">{femaleCount}</td>
-                </tr>
-                {otherCount > 0 && (
-                  <tr className="border-t border-gray-100">
-                    <td className="px-3 py-2 text-gray-600">Other</td>
-                    <td className="px-3 py-2 text-center text-gray-900">{otherCount}</td>
-                  </tr>
-                )}
               </tfoot>
             </table>
           </div>
