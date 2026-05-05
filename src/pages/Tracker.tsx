@@ -242,7 +242,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
         wrapPackageName(patient?.package_name ?? ''),
         ...TRACKER_COLS.map((col) => {
           if (!patient) return ''
-          if (col.key === 'consultation') return ''
+          if (col.key === 'consultation') return patient.assigned_doctor ?? ''
           if (col.key === 'lunch') return getEffectiveLunchValue(patient, groupsWithLunch)
           return getTrackerCellValue(patient.pkg, col.key)
         }),
@@ -302,7 +302,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
 }
 
 export default function Tracker() {
-  const { state, updatePatientPpbsTime, updateTrackerCellState } = useApp()
+  const { state, updatePatientPpbsTime, updateTrackerCellState, updateAssignedDoctor } = useApp()
 
   // ─── PPBS inline-edit state ──────────────────────
   const [editingPpbsId, setEditingPpbsId] = useState<string | null>(null)
@@ -684,18 +684,18 @@ export default function Tracker() {
                     )
                   }
 
-                  // ── Consultation: cycle I → A → S → (clear) ──────
+                  // ── Consultation: cycle S → A → I → (clear) – updates assigned_doctor ──
                   if (col.key === 'consultation') {
-                    const cs = p.tracker_cell_states['consultation'] ?? ''
-                    const next = cs === '' ? 'I' : cs === 'I' ? 'A' : cs === 'A' ? 'S' : null
+                    const doc = p.assigned_doctor
+                    const next: import('@/types').DoctorCode = doc === null ? 'S' : doc === 'S' ? 'A' : doc === 'A' ? 'I' : null
                     return (
                       <td
                         key="consultation"
                         className={`text-center font-semibold cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
-                        onClick={() => throttledCellClick(`${p.id}:consultation`, () => void updateTrackerCellState(p.id, 'consultation', next, p.tracker_cell_states))}
-                        title="Click to cycle: I → A → S → clear"
+                        onClick={() => throttledCellClick(`${p.id}:consultation`, () => void updateAssignedDoctor(p.id, next))}
+                        title="Click to cycle: S → A → I → clear (sets primary physician)"
                       >
-                        {cs}
+                        {doc ?? ''}
                       </td>
                     )
                   }

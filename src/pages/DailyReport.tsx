@@ -17,6 +17,21 @@ type ReportPatient = {
   out_time: string
 }
 
+type Gender = 'Male' | 'Female' | 'Other'
+
+/** Infer gender from package name suffix (e.g. "GOLD MALE" → Male, "GOLD FEMALE" → Female) */
+function inferGenderFromPackage(packageName: string): Gender {
+  const upper = packageName.trim().toUpperCase()
+  if (upper.endsWith('FEMALE')) return 'Female'
+  if (upper.endsWith('MALE')) return 'Male'
+  return 'Other'
+}
+
+/** Strip MALE / FEMALE suffix to get base package name */
+function basePackageName(packageName: string): string {
+  return packageName.trim().replace(/\s*(MALE|FEMALE)\s*$/i, '').trim() || packageName
+}
+
 /** Uppercase the name part, keep salutation as-is. */
 function uppercaseName(raw: string): string {
   const m = raw.match(/^(Mr\.|Mrs\.|Ms\.|Dr\.|Baby|Fr|Master|Smt\.?)\s*/i)
@@ -266,6 +281,59 @@ export default function DailyReport() {
           </tfoot>
         </table>
       </div>
+
+      {/* Package-wise count summary */}
+      {(() => {
+        const pkgCounts = patients.reduce<Record<string, number>>((acc, p) => {
+          const key = p.package_name ? basePackageName(p.package_name) : '—'
+          acc[key] = (acc[key] ?? 0) + 1
+          return acc
+        }, {})
+        const entries = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1])
+        const maleCount = patients.filter((p) => inferGenderFromPackage(p.package_name) === 'Male').length
+        const femaleCount = patients.filter((p) => inferGenderFromPackage(p.package_name) === 'Female').length
+        const otherCount = patients.length - maleCount - femaleCount
+        return (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+            <table className="text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Package</th>
+                  <th className="text-center px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Count</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {entries.map(([pkg, count]) => (
+                  <tr key={pkg} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-gray-800">{pkg}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-gray-900">{count}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50 border-t border-gray-200">
+                  <td className="px-3 py-2 font-semibold text-gray-900">Total</td>
+                  <td className="px-3 py-2 text-center font-semibold text-gray-900">{patients.length}</td>
+                </tr>
+                <tr className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-gray-600">Male</td>
+                  <td className="px-3 py-2 text-center text-gray-900">{maleCount}</td>
+                </tr>
+                <tr className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-gray-600">Female</td>
+                  <td className="px-3 py-2 text-center text-gray-900">{femaleCount}</td>
+                </tr>
+                {otherCount > 0 && (
+                  <tr className="border-t border-gray-100">
+                    <td className="px-3 py-2 text-gray-600">Other</td>
+                    <td className="px-3 py-2 text-center text-gray-900">{otherCount}</td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+          </div>
+        )
+      })()}
     </div>
   )
 }
