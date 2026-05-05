@@ -17,16 +17,6 @@ type ReportPatient = {
   out_time: string
 }
 
-type Gender = 'Male' | 'Female' | 'Other'
-
-/** Infer gender from package name suffix (e.g. "GOLD MALE" → Male, "GOLD FEMALE" → Female) */
-function inferGenderFromPackage(packageName: string): Gender {
-  const upper = packageName.trim().toUpperCase()
-  if (upper.endsWith('FEMALE')) return 'Female'
-  if (upper.endsWith('MALE')) return 'Male'
-  return 'Other'
-}
-
 /** Strip MALE / FEMALE suffix to get base package name */
 function basePackageName(packageName: string): string {
   return packageName.trim().replace(/\s*(MALE|FEMALE)\s*$/i, '').trim() || packageName
