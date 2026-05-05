@@ -262,6 +262,10 @@ export default function DepartmentView() {
                   const groupPatients = p.group_id
                     ? queue.filter((qp) => qp.group_id === p.group_id && qp.currentStep?.status === 'NOT_STARTED')
                     : [p]
+                  // Start each task immediately so the actual start time is recorded now
+                  groupPatients.forEach((gp) => {
+                    if (gp.currentStep?.id) startTask(gp.currentStep.id)
+                  })
                   setEditEntries(groupPatients.map((gp) => ({
                     patientId: gp.id,
                     taskId: gp.currentStep?.id,
@@ -421,8 +425,10 @@ export default function DepartmentView() {
               {editEntries.map((entry, idx) => {
                 const pkgSearch = editPkgSearch[entry.patientId] ?? ''
                 const filteredPkgs = pkgSearch.trim()
-                  ? _packages.filter((p) => p.name.toLowerCase().includes(pkgSearch.toLowerCase()))
-                  : _packages
+                  ? _packages.filter((p) =>
+                      p.name.toLowerCase().split(/\s+/).some((word) => word.startsWith(pkgSearch.toLowerCase()))
+                    )
+                  : []
                 return (
                   <div key={entry.patientId} className="p-5 space-y-3">
                     {editEntries.length > 1 && (
@@ -538,7 +544,6 @@ export default function DepartmentView() {
                       updatePatientPackage(entry.patientId, entry.pkgId)
                     }
                     if (editIsStart && entry.taskId) {
-                      startTask(entry.taskId)
                       completeTask(entry.taskId)
                     }
                   })
