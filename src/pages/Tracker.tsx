@@ -86,7 +86,7 @@ function getEffectiveLunchValue(patient: CheckedInPatient, groupsWithLunch: Set<
   return val
 }
 
-type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; assigned_doctor: DoctorCode; priority: import('@/types').Priority; created_at: string; outTime?: string; ppbs_time: string | null; group_id: string | null; is_international: boolean }
+type CheckedInPatient = { id: string; name: string; uhid: string; package_name?: string; pkg?: Package; checked_in_at: string; package_id: string | null; assigned_doctor: DoctorCode; priority: import('@/types').Priority; created_at: string; outTime?: string; ppbs_time: string | null; group_id: string | null; is_international: boolean; tracker_cell_states: Record<string, string> }
 
 /** Return HH:MM of the last completed task for a patient, only if ALL tasks are completed */
 function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
@@ -302,7 +302,7 @@ async function downloadTrackerExcel(checkedIn: CheckedInPatient[]) {
 }
 
 export default function Tracker() {
-  const { state, updatePatientPpbsTime } = useApp()
+  const { state, updatePatientPpbsTime, updateTrackerCellState } = useApp()
 
   // ─── PPBS inline-edit state ──────────────────────
   const [editingPpbsId, setEditingPpbsId] = useState<string | null>(null)
@@ -314,6 +314,15 @@ export default function Tracker() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const touchStartX = useRef<number | null>(null)
+  // Per-cell click throttle: key = `${patientId}:${colKey}`, value = last-click timestamp
+  const cellClickTs = useRef<Record<string, number>>({})
+  const CELL_CLICK_GAP_MS = 400
+  const throttledCellClick = useCallback((key: string, fn: () => void) => {
+    const now = Date.now()
+    if ((cellClickTs.current[key] ?? 0) + CELL_CLICK_GAP_MS > now) return
+    cellClickTs.current[key] = now
+    fn()
+  }, [])
 
   useEffect(() => {
     const id = setInterval(() => setNowIST(getISTTimeString()), 1000)
@@ -335,6 +344,7 @@ export default function Tracker() {
         pkg,
         package_name: pkg?.name,
         outTime: getOutTime(p.id, state.patientTasks),
+        tracker_cell_states: p.tracker_cell_states ?? {},
       }
     })
 
@@ -405,6 +415,19 @@ export default function Tracker() {
   const safePage = Math.min(currentPage, totalPages - 1)
   const pagePatients = checkedIn.slice(safePage * PATIENTS_PER_PAGE, (safePage + 1) * PATIENTS_PER_PAGE)
   const anyPpbsYellow = pagePatients.some((p) => isPpbsAlertWindow(p.ppbs_time, nowIST))
+
+  // Build a stable group→color-index map (0 or 1) based on encounter order in checkedIn
+  const groupColorMap = (() => {
+    const map: Record<string, number> = {}
+    let count = 0
+    for (const pt of checkedIn) {
+      if (pt.group_id && !(pt.group_id in map)) {
+        map[pt.group_id] = count++
+      }
+    }
+    return map
+  })()
+  const GROUP_COLORS = ['#3b82f6', '#f97316'] // blue-500 / orange-500
 
   return (
     <div className={isFullscreen ? 'fixed inset-0 z-50 bg-white flex flex-col px-3 pt-1.5 pb-1.5 gap-1.5' : 'space-y-4'}>
@@ -534,7 +557,13 @@ export default function Tracker() {
           <tbody className="divide-y divide-gray-100">
             {pagePatients.map((p, idx) => (
               <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                <td className={`text-gray-500 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>{safePage * PATIENTS_PER_PAGE + idx + 1}</td>
+                <td
+                  className={`text-gray-500 ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}
+                  style={p.group_id ? { borderLeft: `3px solid ${GROUP_COLORS[(groupColorMap[p.group_id] ?? 0) % 2]}` } : { borderLeft: '3px solid transparent' }}
+                  title={p.group_id ? 'Part of a group' : undefined}
+                >
+                  {safePage * PATIENTS_PER_PAGE + idx + 1}
+                </td>
                 <td className={isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}>
                   <Link
                     to={`/patient/${p.id}`}
@@ -548,24 +577,31 @@ export default function Tracker() {
                 {TRACKER_COLS.map((col) => {
                   if (col.key === 'ppbs') {
                     const pkgVal = getTrackerCellValue(p.pkg, 'ppbs')
-                    const isEditable = pkgVal.toLowerCase() !== 'x'
                     const isEditing = editingPpbsId === p.id
                     const isGlowing = glowingCells[p.id]
-                    const isYellow = !isGlowing && isPpbsAlertWindow(p.ppbs_time, nowIST)
+                    const cellState = p.tracker_cell_states['ppbs'] ?? ''
+                    const isPersistYellow = cellState === 'yellow'
+                    const isAlertYellow = !isGlowing && !isPersistYellow && isPpbsAlertWindow(p.ppbs_time, nowIST)
                     const displayTime = p.ppbs_time ?? ''
                     return (
                       <td
                         key="ppbs"
                         className={[
                           `text-center text-gray-700 transition-all duration-300 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`,
-                          isEditable ? 'cursor-pointer select-none' : '',
+                          'cursor-pointer select-none',
                           isGlowing ? 'ring-2 ring-green-400 shadow-[0_0_8px_2px_rgba(74,222,128,0.7)] rounded' : '',
-                          isYellow ? 'bg-yellow-100' : '',
+                          isPersistYellow ? 'bg-[#FEFF33]' : isAlertYellow ? 'bg-yellow-100' : '',
                         ].join(' ')}
                         onClick={() => {
-                          if (isEditable && !isEditing) openPpbsEdit(p.id, p.ppbs_time)
+                          if (!isEditing) {
+                            // single click: toggle persistent yellow highlight
+                            void updateTrackerCellState(p.id, 'ppbs', isPersistYellow ? null : 'yellow', p.tracker_cell_states)
+                          }
                         }}
-                        title={isEditable ? 'Click to enter PPBS time' : undefined}
+                        onDoubleClick={() => {
+                          if (!isEditing) openPpbsEdit(p.id, p.ppbs_time)
+                        }}
+                        title="Click to highlight · Double-click to enter/edit PPBS time"
                       >
                         {isEditing ? (
                           <input
@@ -597,9 +633,126 @@ export default function Tracker() {
                       </td>
                     )
                   }
+                  // ── TMT: cycle dot·F → dot·M → dot·C → tick·F → tick·M → tick·C → clear
+                  if (col.key === 'tmt') {
+                    const cs = p.tracker_cell_states['tmt'] ?? ''
+                    const TMT_CYCLE = ['dot-F', 'dot-M', 'dot-C', 'tick-F', 'tick-M', 'tick-C'] as const
+                    const curIdx = TMT_CYCLE.indexOf(cs as typeof TMT_CYCLE[number])
+                    const next: string | null = curIdx === -1 ? 'dot-F' : curIdx < TMT_CYCLE.length - 1 ? TMT_CYCLE[curIdx + 1] : null
+                    const isDot = cs.startsWith('dot-')
+                    const isTick = cs.startsWith('tick-')
+                    const letter = cs.split('-')[1] ?? ''
+                    return (
+                      <td
+                        key="tmt"
+                        className={`text-center cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
+                        onClick={() => throttledCellClick(`${p.id}:tmt`, () => void updateTrackerCellState(p.id, 'tmt', next, p.tracker_cell_states))}
+                        title="Click to cycle: dot·F → dot·M → dot·C → ✓·F → ✓·M → ✓·C → clear"
+                      >
+                        {cs === '' && getTrackerCellValue(p.pkg, 'tmt')}
+                        {(isDot || isTick) && (
+                          <span className="inline-flex items-center gap-0.5">
+                            {isDot
+                              ? <span className="text-black font-black text-[11px] leading-none">●</span>
+                              : <span className="text-green-600 font-black text-[11px] leading-none">✓</span>
+                            }
+                            <span className="font-bold text-[9px] text-gray-800">{letter}</span>
+                          </span>
+                        )}
+                      </td>
+                    )
+                  }
+
+                  // ── Consultation: cycle I → A → S → (clear) ──────
+                  if (col.key === 'consultation') {
+                    const cs = p.tracker_cell_states['consultation'] ?? ''
+                    const next = cs === '' ? 'I' : cs === 'I' ? 'A' : cs === 'A' ? 'S' : null
+                    return (
+                      <td
+                        key="consultation"
+                        className={`text-center font-semibold cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
+                        onClick={() => throttledCellClick(`${p.id}:consultation`, () => void updateTrackerCellState(p.id, 'consultation', next, p.tracker_cell_states))}
+                        title="Click to cycle: I → A → S → clear"
+                      >
+                        {cs}
+                      </td>
+                    )
+                  }
+
+                  // ── ECHO: dot → tick → tick+N → clear ────────────
+                  if (col.key === 'echo') {
+                    const cs = p.tracker_cell_states['echo'] ?? ''
+                    // treat blank package value same as '-' so the cell is always clickable
+                    const echoBase = getTrackerCellValue(p.pkg, 'echo')
+                    const next = cs === '' ? 'dot' : cs === 'dot' ? 'tick' : cs === 'tick' ? 'tick-n' : null
+                    return (
+                      <td
+                        key="echo"
+                        className={`text-center cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
+                        onClick={() => throttledCellClick(`${p.id}:echo`, () => void updateTrackerCellState(p.id, 'echo', next, p.tracker_cell_states))}
+                        title="Click to cycle: dot → ✓ → ✓N → clear"
+                      >
+                        {cs === '' && (echoBase !== '' && echoBase !== '-' ? echoBase : null)}
+                        {cs === 'dot' && <span className="text-black font-black text-[11px] leading-none">●</span>}
+                        {cs === 'tick' && <span className="text-green-600 font-black text-[11px] leading-none">✓</span>}
+                        {cs === 'tick-n' && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="text-green-600 font-black text-[11px] leading-none">✓</span>
+                            <span className="font-bold text-[9px] text-gray-800">N</span>
+                          </span>
+                        )}
+                      </td>
+                    )
+                  }
+
+                  // ── PFT: single click → 'P' with yellow highlight ─
+                  if (col.key === 'pft') {
+                    const cs = p.tracker_cell_states['pft'] ?? ''
+                    const isP = cs === 'P'
+                    return (
+                      <td
+                        key="pft"
+                        className={[
+                          `text-center font-semibold cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`,
+                          isP ? 'bg-[#FEFF33]' : '',
+                        ].join(' ')}
+                        onClick={() => throttledCellClick(`${p.id}:pft`, () => void updateTrackerCellState(p.id, 'pft', isP ? null : 'P', p.tracker_cell_states))}
+                        title="Click to mark P"
+                      >
+                        {isP ? 'P' : getTrackerCellValue(p.pkg, 'pft')}
+                      </td>
+                    )
+                  }
+
+                  // ── General tracker cell ──────────────────────────
+                  const rawVal = col.key === 'lunch' ? getEffectiveLunchValue(p, groupsWithLunch) : getTrackerCellValue(p.pkg, col.key)
+                  const cellState = p.tracker_cell_states[col.key] ?? ''
+                  const isBlankOrDash = rawVal === '' || rawVal === '-'
+                  const isBM = rawVal === 'B' || rawVal === 'M'
+                  const isClickable = isBlankOrDash || isBM
+                  const isYellowCell = cellState === 'yellow'
+                  const isTickCell = cellState === 'tick'
+
                   return (
-                    <td key={col.key} className={`text-center text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}>
-                      {col.key === 'consultation' ? '' : col.key === 'lunch' ? getEffectiveLunchValue(p, groupsWithLunch) : getTrackerCellValue(p.pkg, col.key)}
+                    <td
+                      key={col.key}
+                      className={[
+                        `text-center text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`,
+                        isClickable ? 'cursor-pointer select-none' : '',
+                        isYellowCell ? 'bg-[#FEFF33]' : '',
+                      ].join(' ')}
+                      onClick={isClickable ? () => throttledCellClick(`${p.id}:${col.key}`, () => {
+                        if (isBlankOrDash) {
+                          void updateTrackerCellState(p.id, col.key, isTickCell ? null : 'tick', p.tracker_cell_states)
+                        } else if (isBM) {
+                          void updateTrackerCellState(p.id, col.key, isYellowCell ? null : 'yellow', p.tracker_cell_states)
+                        }
+                      }) : undefined}
+                      title={isBlankOrDash ? 'Click to mark done' : isBM ? 'Click to highlight' : undefined}
+                    >
+                      {isTickCell ? (
+                        <span className="text-green-600 font-bold text-[11px] leading-none">✓</span>
+                      ) : rawVal}
                     </td>
                   )
                 })}

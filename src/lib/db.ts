@@ -85,7 +85,7 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
   let query = supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, created_at, checked_in_at, clinic_date, group_id, ppbs_time')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
     .order('created_at')
   if (clinicDate) {
     query = query.eq('clinic_date', clinicDate)
@@ -106,6 +106,7 @@ export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
     clinic_date: p.clinic_date,
     group_id: p.group_id ?? null,
     ppbs_time: p.ppbs_time ?? null,
+    tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
   }))
 }
 
@@ -204,6 +205,25 @@ export async function updatePatientPpbsTimeDb(patientId: string, ppbsTime: strin
   const { error } = await supabase
     .from('patients')
     .update({ ppbs_time: ppbsTime })
+    .eq('id', patientId)
+  if (error) throw error
+}
+
+export async function updateTrackerCellStateDb(
+  patientId: string,
+  cellKey: string,
+  value: string | null,
+  currentStates: Record<string, string>
+): Promise<void> {
+  const next = { ...currentStates }
+  if (value === null) {
+    delete next[cellKey]
+  } else {
+    next[cellKey] = value
+  }
+  const { error } = await supabase
+    .from('patients')
+    .update({ tracker_cell_states: next })
     .eq('id', patientId)
   if (error) throw error
 }

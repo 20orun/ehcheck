@@ -62,6 +62,7 @@ import {
   updatePatientInfoDb,
   updatePatientInternationalDb,
   updatePatientPpbsTimeDb,
+  updateTrackerCellStateDb,
 } from '@/lib/db'
 
 // ─── State ───────────────────────────────────────────
@@ -106,6 +107,7 @@ type Action =
   | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
   | { type: 'UPDATE_PATIENT_INTERNATIONAL'; payload: { patientId: string; isInternational: boolean } }
   | { type: 'UPDATE_PATIENT_PPBS_TIME'; payload: { patientId: string; ppbsTime: string | null } }
+  | { type: 'UPDATE_TRACKER_CELL_STATE'; payload: { patientId: string; cellKey: string; value: string | null } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
   | { type: 'REMOVE_TASK'; payload: { taskId: string } }
@@ -319,13 +321,38 @@ function reducer(state: AppState, action: Action): AppState {
             : p
         ),
       }
-    case 'UPSERT_PATIENT': {
-      const exists = state.patients.some((p) => p.id === action.payload.id)
+    case 'UPDATE_TRACKER_CELL_STATE': {
+      const { patientId, cellKey, value } = action.payload
       return {
         ...state,
-        patients: exists
-          ? state.patients.map((p) => p.id === action.payload.id ? action.payload : p)
-          : [...state.patients, action.payload],
+        patients: state.patients.map((p) => {
+          if (p.id !== patientId) return p
+          const next = { ...p.tracker_cell_states }
+          if (value === null) delete next[cellKey]
+          else next[cellKey] = value
+          return { ...p, tracker_cell_states: next }
+        }),
+      }
+    }
+    case 'UPSERT_PATIENT': {
+      const existing = state.patients.find((p) => p.id === action.payload.id)
+      if (!existing) {
+        return { ...state, patients: [...state.patients, action.payload] }
+      }
+      // Merge tracker_cell_states: local values win over incoming realtime echo
+      // to prevent flash when a concurrent patient update arrives while a tracker
+      // cell write is still in-flight (optimistic update would be overwritten).
+      const mergedTrackerStates = {
+        ...action.payload.tracker_cell_states,
+        ...existing.tracker_cell_states,
+      }
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.id
+            ? { ...action.payload, tracker_cell_states: mergedTrackerStates }
+            : p
+        ),
       }
     }
     case 'UPSERT_TASK': {
@@ -378,6 +405,7 @@ interface AppContextType {
   updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   updatePatientInternational: (patientId: string, isInternational: boolean) => void
   updatePatientPpbsTime: (patientId: string, ppbsTime: string | null) => Promise<void>
+  updateTrackerCellState: (patientId: string, cellKey: string, value: string | null, currentStates: Record<string, string>) => Promise<void>
   startTask: (taskId: string) => void
   completeTask: (taskId: string) => void
   skipTask: (taskId: string) => void
@@ -537,7 +565,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'patients' },
         (payload) => {
-          const p = payload.new as Patient
+          const raw = payload.new as Patient & { tracker_cell_states?: Record<string, string> }
+          const p: Patient = { ...raw, tracker_cell_states: raw.tracker_cell_states ?? {} }
           dispatch({ type: 'UPSERT_PATIENT', payload: p })
         }
       )
@@ -546,7 +575,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'patients' },
         (payload) => {
-          const p = payload.new as Patient
+          const raw = payload.new as Patient & { tracker_cell_states?: Record<string, string> }
+          const p: Patient = { ...raw, tracker_cell_states: raw.tracker_cell_states ?? {} }
           if (p.clinic_date === selectedDateRef.current) {
             dispatch({ type: 'UPSERT_PATIENT', payload: p })
           }
@@ -939,6 +969,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clinic_date: clinicDateStr,
         group_id: null,
         ppbs_time: null,
+        tracker_cell_states: {},
       }
       let tasks: PatientTask[]
       if (packageId) {
@@ -1329,6 +1360,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const updateTrackerCellState = useCallback(
+    async (patientId: string, cellKey: string, value: string | null, currentStates: Record<string, string>): Promise<void> => {
+      dispatch({ type: 'UPDATE_TRACKER_CELL_STATE', payload: { patientId, cellKey, value } })
+      await updateTrackerCellStateDb(patientId, cellKey, value, currentStates)
+    },
+    []
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -1379,6 +1418,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updatePatientInfo,
         updatePatientInternational,
         updatePatientPpbsTime,
+        updateTrackerCellState,
         // Department online/offline
         toggleDeptOffline,
         isDeptOffline,
