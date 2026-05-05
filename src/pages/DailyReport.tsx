@@ -76,7 +76,7 @@ function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'cen
   cell.alignment = { horizontal: hAlign, vertical: 'middle', wrapText: true }
 }
 
-const COL_HEADERS = ['SL. NO', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', 'IN TIME', 'OUT TIME']
+const COL_HEADERS = ['SL. NO', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', '', 'IN TIME', 'OUT TIME']
 const TOTAL_COLS = COL_HEADERS.length
 
 async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: string) {
@@ -120,6 +120,7 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
       p.package_name || '—',
       p.doctor_name || '—',
       p.package_cost !== null ? p.package_cost : 0,
+      '',
       p.in_time,
       p.out_time || '',
     ]
@@ -145,7 +146,7 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
   totalRow.height = 24
 
   /* Column widths */
-  const colWidths = [6, 28, 14, 24, 24, 14, 10, 10]
+  const colWidths = [6, 28, 14, 24, 24, 14, 4, 10, 10]
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
   /* Download */
@@ -161,14 +162,14 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
 
 // ─── Clipboard ───────────────────────────────────────
 function copyToClipboard(patients: ReportPatient[]) {
-  const rows = patients.map((p, idx) =>
+  const rows = patients.map((p) =>
     [
-      idx + 1,
       uppercaseName(p.name),
       p.uhid,
       p.package_name || '—',
       p.doctor_name || '—',
       p.package_cost !== null ? p.package_cost : '',
+      '',
       p.in_time,
       p.out_time || '',
     ].join('\t')

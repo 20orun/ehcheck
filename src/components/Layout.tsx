@@ -55,6 +55,7 @@ export default function Layout() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [nowIST, setNowIST] = useState(getISTNow)
   const accountRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
   const { user, signOut, isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode, role } = useAuth()
   const location = useLocation()
@@ -91,6 +92,10 @@ export default function Layout() {
     const id = setInterval(() => setNowIST(getISTNow()), 1000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0)
+  }, [location.pathname])
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -306,7 +311,7 @@ export default function Layout() {
         )}
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4 lg:p-6">
+        <main ref={mainRef} className="flex-1 overflow-auto p-4 lg:p-6">
           <Outlet />
         </main>
       </div>
