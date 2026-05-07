@@ -258,6 +258,21 @@ export default function DepartmentView() {
                 }
               })
 
+              // Determine the NEXT patient for billing (earliest checked-in, not started)
+              let nextPatientId: string | null = null
+              if (isBilling) {
+                const notStartedCheckedIn = queue
+                  .filter((p) => p.currentStep?.status === 'NOT_STARTED' && p.checked_in_at)
+                  .sort((a, b) => {
+                    const aTime = new Date(a.checked_in_at!).getTime()
+                    const bTime = new Date(b.checked_in_at!).getTime()
+                    return aTime - bTime
+                  })
+                if (notStartedCheckedIn.length > 0) {
+                  nextPatientId = notStartedCheckedIn[0].id
+                }
+              }
+
               const renderRow = (p: typeof sortedQueue[0]) => {
                 // For billing dept: hide Start button if patient not checked in
                 const canStart = !isBilling || !!p.checked_in_at
@@ -332,6 +347,13 @@ export default function DepartmentView() {
                         </div>
                       )}
                     </div>
+
+                    {/* NEXT label for billing dept */}
+                    {isBilling && p.id === nextPatientId && (
+                      <span className="shrink-0 inline-flex items-center justify-center px-2 py-1 rounded text-[10px] font-bold bg-blue-500 text-white">
+                        NEXT
+                      </span>
+                    )}
 
                     <TaskStatusIcon status={p.currentStep?.status || 'NOT_STARTED'} isBilling={isBilling} />
 
