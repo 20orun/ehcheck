@@ -90,6 +90,19 @@ export default function DepartmentView() {
   const queue = getDepartmentQueue(id!)
   const stats = getDepartmentStats(id!)
 
+  // Determine the NEXT patient for billing (earliest checked-in, not started)
+  const nextPatientId = useMemo(() => {
+    if (!isBilling) return null
+    const notStartedCheckedIn = queue
+      .filter((p) => p.currentStep?.status === 'NOT_STARTED' && p.checked_in_at)
+      .sort((a, b) => {
+        const aTime = new Date(a.checked_in_at!).getTime()
+        const bTime = new Date(b.checked_in_at!).getTime()
+        return aTime - bTime
+      })
+    return notStartedCheckedIn.length > 0 ? notStartedCheckedIn[0].id : null
+  }, [isBilling, queue])
+
   // Filter
   const filteredQueue = queue.filter((p) => {
     // Name search filter
@@ -257,21 +270,6 @@ export default function DepartmentView() {
                   units.push({ type: 'group', groupId: p.group_id, patients: sortedQueue.filter((sp) => sp.group_id === p.group_id) })
                 }
               })
-
-              // Determine the NEXT patient for billing (earliest checked-in, not started)
-              let nextPatientId: string | null = null
-              if (isBilling) {
-                const notStartedCheckedIn = queue
-                  .filter((p) => p.currentStep?.status === 'NOT_STARTED' && p.checked_in_at)
-                  .sort((a, b) => {
-                    const aTime = new Date(a.checked_in_at!).getTime()
-                    const bTime = new Date(b.checked_in_at!).getTime()
-                    return aTime - bTime
-                  })
-                if (notStartedCheckedIn.length > 0) {
-                  nextPatientId = notStartedCheckedIn[0].id
-                }
-              }
 
               const renderRow = (p: typeof sortedQueue[0]) => {
                 // For billing dept: hide Start button if patient not checked in
