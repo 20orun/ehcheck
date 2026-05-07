@@ -18,7 +18,7 @@ export function StatusBadge({ status }: { status: StepStatus }) {
   )
 }
 
-export function TaskStatusIcon({ status }: { status: StepStatus }) {
+export function TaskStatusIcon({ status, isBilling }: { status: StepStatus; isBilling?: boolean }) {
   if (status === 'COMPLETED') {
     return (
       <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-green-600 text-white shrink-0">
@@ -27,6 +27,13 @@ export function TaskStatusIcon({ status }: { status: StepStatus }) {
     )
   }
   if (status === 'IN_PROGRESS' || status === 'DELAYED') {
+    if (isBilling) {
+      return (
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-yellow-500 text-white shrink-0 text-xs font-bold">
+          B
+        </span>
+      )
+    }
     return (
       <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-blue-500 text-white shrink-0">
         <ArrowUp className="w-3 h-3" strokeWidth={3} />

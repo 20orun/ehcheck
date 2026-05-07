@@ -55,9 +55,12 @@ export default function DepartmentView() {
   const [sortBy, setSortBy] = useState<SortOption>('vip-wait')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Default sort for billing department: checked-in earliest
+  // Default sort and filter for billing department: not completed, checked-in earliest
   useEffect(() => {
-    if (isBilling) setSortBy('checkin-asc')
+    if (isBilling) {
+      setSortBy('checkin-asc')
+      setStatusFilter('NOT_COMPLETED')
+    }
   }, [isBilling])
 
   // Edit / billing modal state
@@ -94,6 +97,7 @@ export default function DepartmentView() {
     if (statusFilter === 'ALL') return true
     if (statusFilter === 'VIP') return p.priority === 'VIP'
     if (statusFilter === 'NORMAL') return p.priority === 'NORMAL'
+    if (statusFilter === 'NOT_COMPLETED') return p.currentStep?.status !== 'COMPLETED'
     return p.currentStep?.status === statusFilter
   })
 
@@ -126,6 +130,7 @@ export default function DepartmentView() {
     ALL: queue.length,
     VIP: queue.filter((p) => p.priority === 'VIP').length,
     NORMAL: queue.filter((p) => p.priority === 'NORMAL').length,
+    NOT_COMPLETED: queue.filter((p) => p.currentStep?.status !== 'COMPLETED').length,
     NOT_STARTED: queue.filter((p) => p.currentStep?.status === 'NOT_STARTED').length,
     IN_PROGRESS: queue.filter((p) => p.currentStep?.status === 'IN_PROGRESS').length,
     COMPLETED: queue.filter((p) => p.currentStep?.status === 'COMPLETED').length,
@@ -185,6 +190,7 @@ export default function DepartmentView() {
           { key: 'ALL', label: 'All' },
           { key: 'VIP', label: 'VIP' },
           { key: 'NORMAL', label: 'Normal' },
+          { key: 'NOT_COMPLETED', label: 'Not Completed' },
           { key: 'NOT_STARTED', label: 'Not Started' },
           { key: 'IN_PROGRESS', label: 'In Progress' },
           { key: 'COMPLETED', label: 'Completed' },
@@ -327,7 +333,7 @@ export default function DepartmentView() {
                       )}
                     </div>
 
-                    <TaskStatusIcon status={p.currentStep?.status || 'NOT_STARTED'} />
+                    <TaskStatusIcon status={p.currentStep?.status || 'NOT_STARTED'} isBilling={isBilling} />
 
                     {/* Edit button for billing dept */}
                     {isBilling && (
