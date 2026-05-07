@@ -5,8 +5,7 @@ import { Plus, Pencil, Trash2, X, Check, BookOpen, Loader2, CheckCircle2, Clock3
 import clsx from 'clsx'
 import ExcelJS from 'exceljs'
 import { EmptyState } from '@/components/ui'
-import { DOCTORS } from '@/types'
-import type { CrossConsultation, CrossConsultationStatus, Package, DoctorCode } from '@/types'
+import type { CrossConsultation, CrossConsultationStatus, Package } from '@/types'
 
 type TabType = 'consultations' | 'report' | 'tracker'
 
@@ -28,21 +27,11 @@ type CrossTrackerRow = {
   consultations: Array<{ department: string; doctor: string }>
 }
 
-/** Strip MALE / FEMALE suffix to get base package name */
-function basePackageName(packageName: string): string {
-  return packageName.trim().replace(/\s*(MALE|FEMALE)\s*$/i, '').trim() || packageName
-}
-
 /** Uppercase the name part, keep salutation as-is. */
 function uppercaseName(raw: string): string {
   const m = raw.match(/^(Mr\.|Mrs\.|Ms\.|Dr\.|Baby|Fr|Master|Smt\.?)\s*/i)
   if (m) return m[0] + raw.slice(m[0].length).toUpperCase()
   return raw.toUpperCase()
-}
-
-function getDoctorName(code: DoctorCode): string {
-  if (!code) return ''
-  return DOCTORS.find((d) => d.code === code)?.name ?? code
 }
 
 function formatDate(date: Date): string {
