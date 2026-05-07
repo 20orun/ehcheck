@@ -352,21 +352,20 @@ function reducer(state: AppState, action: Action): AppState {
     case 'UPSERT_PATIENT': {
       const existing = state.patients.find((p) => p.id === action.payload.id)
       if (!existing) {
+        console.log('➕ Adding new patient:', action.payload.id)
         return { ...state, patients: [...state.patients, action.payload] }
       }
-      // Merge tracker_cell_states: local values win over incoming realtime echo
-      // to prevent flash when a concurrent patient update arrives while a tracker
-      // cell write is still in-flight (optimistic update would be overwritten).
-      const mergedTrackerStates = {
-        ...action.payload.tracker_cell_states,
-        ...existing.tracker_cell_states,
-      }
+      // Accept remote state directly - optimistic updates will be confirmed by the echo
+      // No need to merge as the remote state is the source of truth
+      console.log('🔀 Updating patient with remote state:', {
+        patientId: action.payload.id,
+        remote: action.payload.tracker_cell_states,
+        previousLocal: existing.tracker_cell_states
+      })
       return {
         ...state,
         patients: state.patients.map((p) =>
-          p.id === action.payload.id
-            ? { ...action.payload, tracker_cell_states: mergedTrackerStates }
-            : p
+          p.id === action.payload.id ? action.payload : p
         ),
       }
     }
@@ -612,8 +611,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'patients' },
         (payload) => {
+          console.log('📡 Received patient UPDATE:', payload)
           const raw = payload.new as Patient & { tracker_cell_states?: Record<string, string> }
           const p: Patient = { ...raw, tracker_cell_states: raw.tracker_cell_states ?? {} }
+          console.log('🔄 Dispatching UPSERT_PATIENT:', p.id, p.tracker_cell_states)
           dispatch({ type: 'UPSERT_PATIENT', payload: p })
         }
       )

@@ -222,11 +222,16 @@ export async function updateTrackerCellStateDb(
   } else {
     next[cellKey] = value
   }
+  console.log('🔄 Updating tracker cell:', { patientId, cellKey, value, currentStates, next })
   const { error } = await supabase
     .from('patients')
     .update({ tracker_cell_states: next })
     .eq('id', patientId)
-  if (error) throw error
+  if (error) {
+    console.error('❌ Failed to update tracker cell:', error)
+    throw error
+  }
+  console.log('✅ Successfully updated tracker cell in DB')
 }
 
 export async function updatePatientInfoDb(
