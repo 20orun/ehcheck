@@ -31,7 +31,7 @@ function Guard({ allowed, children }: { allowed: boolean; children: React.ReactN
 }
 
 function AppRoutes() {
-  const { user, loading, isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode } = useAuth()
+  const { user, loading, roleLoading, isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode } = useAuth()
 
   // Only block on the very first load (session check). Never block on roleLoading —
   // doing so would unmount AppProvider and wipe all page state on every background
@@ -49,6 +49,16 @@ function AppRoutes() {
       <Routes>
         <Route path="*" element={<Auth />} />
       </Routes>
+    )
+  }
+
+  // Show loading spinner while role is being fetched (on initial login / refresh)
+  // to prevent Guards from redirecting before role permissions are known
+  if (roleLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+      </div>
     )
   }
 

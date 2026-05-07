@@ -113,6 +113,10 @@ type Action =
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
   | { type: 'REMOVE_TASK'; payload: { taskId: string } }
+  | { type: 'UPSERT_PACKAGE'; payload: Package }
+  | { type: 'DELETE_PACKAGE'; payload: { id: string } }
+  | { type: 'UPSERT_PACKAGE_STEP'; payload: PackageStep }
+  | { type: 'DELETE_PACKAGE_STEP'; payload: { id: string } }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -387,6 +391,35 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         patientTasks: state.patientTasks.filter((t) => t.id !== action.payload.taskId),
       }
+    case 'UPSERT_PACKAGE': {
+      const exists = state.packages.some((p) => p.id === action.payload.id)
+      return {
+        ...state,
+        packages: exists
+          ? state.packages.map((p) => p.id === action.payload.id ? action.payload : p)
+          : [...state.packages, action.payload],
+      }
+    }
+    case 'DELETE_PACKAGE':
+      return {
+        ...state,
+        packages: state.packages.filter((p) => p.id !== action.payload.id),
+        packageSteps: state.packageSteps.filter((s) => s.package_id !== action.payload.id),
+      }
+    case 'UPSERT_PACKAGE_STEP': {
+      const exists = state.packageSteps.some((s) => s.id === action.payload.id)
+      return {
+        ...state,
+        packageSteps: exists
+          ? state.packageSteps.map((s) => s.id === action.payload.id ? action.payload : s)
+          : [...state.packageSteps, action.payload],
+      }
+    }
+    case 'DELETE_PACKAGE_STEP':
+      return {
+        ...state,
+        packageSteps: state.packageSteps.filter((s) => s.id !== action.payload.id),
+      }
     default:
       return state
   }
@@ -603,6 +636,81 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const d = payload.new as { code: string; is_offline: boolean }
           dispatch({ type: 'UPDATE_DOCTOR_OFFLINE', payload: { code: d.code, isOffline: d.is_offline } })
+        }
+      )
+      // Cross consultation status changes from any device
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'cross_consultations' },
+        (payload) => {
+          const cc = payload.new as CrossConsultation
+          dispatch({ type: 'ADD_CROSS_CONSULTATION', payload: cc })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'cross_consultations' },
+        (payload) => {
+          const cc = payload.new as CrossConsultation
+          dispatch({ type: 'UPDATE_CROSS_CONSULTATION', payload: cc })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'cross_consultations' },
+        (payload) => {
+          const id = (payload.old as { id: string }).id
+          if (id) dispatch({ type: 'DELETE_CROSS_CONSULTATION', payload: { id } })
+        }
+      )
+      // Package updates from any device (when coordinator creates/edits packages)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'packages' },
+        (payload) => {
+          const pkg = payload.new as Package
+          dispatch({ type: 'UPSERT_PACKAGE', payload: pkg })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'packages' },
+        (payload) => {
+          const pkg = payload.new as Package
+          dispatch({ type: 'UPSERT_PACKAGE', payload: pkg })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'packages' },
+        (payload) => {
+          const id = (payload.old as { id: string }).id
+          if (id) dispatch({ type: 'DELETE_PACKAGE', payload: { id } })
+        }
+      )
+      // Package step updates from any device
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'package_steps' },
+        (payload) => {
+          const step = payload.new as PackageStep
+          dispatch({ type: 'UPSERT_PACKAGE_STEP', payload: step })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'package_steps' },
+        (payload) => {
+          const step = payload.new as PackageStep
+          dispatch({ type: 'UPSERT_PACKAGE_STEP', payload: step })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'package_steps' },
+        (payload) => {
+          const id = (payload.old as { id: string }).id
+          if (id) dispatch({ type: 'DELETE_PACKAGE_STEP', payload: { id } })
         }
       )
       .subscribe()
