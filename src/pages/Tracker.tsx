@@ -658,8 +658,6 @@ export default function Tracker() {
                   if (col.key === 'tmt') {
                     const cs = p.tracker_cell_states['tmt'] ?? ''
                     const TMT_CYCLE = ['dot-F', 'dot-M', 'dot-C', 'tick-F', 'tick-M', 'tick-C'] as const
-                    const curIdx = TMT_CYCLE.indexOf(cs as typeof TMT_CYCLE[number])
-                    const next: string | null = curIdx === -1 ? 'dot-F' : curIdx < TMT_CYCLE.length - 1 ? TMT_CYCLE[curIdx + 1] : null
                     const isDot = cs.startsWith('dot-')
                     const isTick = cs.startsWith('tick-')
                     const letter = cs.split('-')[1] ?? ''
@@ -667,7 +665,14 @@ export default function Tracker() {
                       <td
                         key="tmt"
                         className={`text-center cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
-                        onClick={() => throttledCellClick(`${p.id}:tmt`, () => void updateTrackerCellState(p.id, 'tmt', next, p.tracker_cell_states))}
+                        onClick={() => throttledCellClick(`${p.id}:tmt`, () => {
+                          // Read current state dynamically
+                          const currentPatient = state.patients.find((pt) => pt.id === p.id)
+                          const currentCs = currentPatient?.tracker_cell_states?.['tmt'] ?? ''
+                          const curIdx = TMT_CYCLE.indexOf(currentCs as typeof TMT_CYCLE[number])
+                          const next: string | null = curIdx === -1 ? 'dot-F' : curIdx < TMT_CYCLE.length - 1 ? TMT_CYCLE[curIdx + 1] : null
+                          void updateTrackerCellState(p.id, 'tmt', next, currentPatient?.tracker_cell_states ?? {})
+                        })}
                         title="Click to cycle: dot·F → dot·M → dot·C → ✓·F → ✓·M → ✓·C → clear"
                       >
                         {cs === '' && getTrackerCellValue(p.pkg, 'tmt')}
@@ -684,16 +689,21 @@ export default function Tracker() {
                     )
                   }
 
-                  // ── Consultation: cycle S → A → I → (clear) – updates assigned_doctor ──
+                  // ── Consultation: cycle I → A → S → (clear) – updates assigned_doctor ──
                   if (col.key === 'consultation') {
                     const doc = p.assigned_doctor
-                    const next: import('@/types').DoctorCode = doc === null ? 'S' : doc === 'S' ? 'A' : doc === 'A' ? 'I' : null
                     return (
                       <td
                         key="consultation"
                         className={`text-center font-semibold cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
-                        onClick={() => throttledCellClick(`${p.id}:consultation`, () => void updateAssignedDoctor(p.id, next))}
-                        title="Click to cycle: S → A → I → clear (sets primary physician)"
+                        onClick={() => throttledCellClick(`${p.id}:consultation`, () => {
+                          // Read current state dynamically
+                          const currentPatient = state.patients.find((pt) => pt.id === p.id)
+                          const currentDoc = currentPatient?.assigned_doctor ?? null
+                          const next: import('@/types').DoctorCode = currentDoc === null ? 'I' : currentDoc === 'I' ? 'A' : currentDoc === 'A' ? 'S' : null
+                          void updateAssignedDoctor(p.id, next)
+                        })}
+                        title="Click to cycle: I → A → S → clear (sets primary physician)"
                       >
                         {doc ?? ''}
                       </td>
@@ -705,12 +715,17 @@ export default function Tracker() {
                     const cs = p.tracker_cell_states['echo'] ?? ''
                     // treat blank package value same as '-' so the cell is always clickable
                     const echoBase = getTrackerCellValue(p.pkg, 'echo')
-                    const next = cs === '' ? 'dot' : cs === 'dot' ? 'tick' : cs === 'tick' ? 'tick-n' : null
                     return (
                       <td
                         key="echo"
                         className={`text-center cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
-                        onClick={() => throttledCellClick(`${p.id}:echo`, () => void updateTrackerCellState(p.id, 'echo', next, p.tracker_cell_states))}
+                        onClick={() => throttledCellClick(`${p.id}:echo`, () => {
+                          // Read current state dynamically
+                          const currentPatient = state.patients.find((pt) => pt.id === p.id)
+                          const currentCs = currentPatient?.tracker_cell_states?.['echo'] ?? ''
+                          const next = currentCs === '' ? 'dot' : currentCs === 'dot' ? 'tick' : currentCs === 'tick' ? 'tick-n' : null
+                          void updateTrackerCellState(p.id, 'echo', next, currentPatient?.tracker_cell_states ?? {})
+                        })}
                         title="Click to cycle: dot → ✓ → ✓N → clear"
                       >
                         {cs === '' && (echoBase !== '' && echoBase !== '-' ? echoBase : null)}
@@ -737,7 +752,13 @@ export default function Tracker() {
                           `text-center font-semibold cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`,
                           isP ? 'bg-[#FEFF33]' : '',
                         ].join(' ')}
-                        onClick={() => throttledCellClick(`${p.id}:pft`, () => void updateTrackerCellState(p.id, 'pft', isP ? null : 'P', p.tracker_cell_states))}
+                        onClick={() => throttledCellClick(`${p.id}:pft`, () => {
+                          // Read current state dynamically
+                          const currentPatient = state.patients.find((pt) => pt.id === p.id)
+                          const currentCs = currentPatient?.tracker_cell_states?.['pft'] ?? ''
+                          const nextValue = currentCs === 'P' ? null : 'P'
+                          void updateTrackerCellState(p.id, 'pft', nextValue, currentPatient?.tracker_cell_states ?? {})
+                        })}
                         title="Click to mark P"
                       >
                         {isP ? 'P' : getTrackerCellValue(p.pkg, 'pft')}
@@ -763,10 +784,15 @@ export default function Tracker() {
                         isYellowCell ? 'bg-[#FEFF33]' : '',
                       ].join(' ')}
                       onClick={isClickable ? () => throttledCellClick(`${p.id}:${col.key}`, () => {
+                        // Read current state dynamically to avoid stale closure
+                        const currentPatient = state.patients.find((pt) => pt.id === p.id)
+                        const currentCellState = currentPatient?.tracker_cell_states?.[col.key] ?? ''
                         if (isBlankOrDash) {
-                          void updateTrackerCellState(p.id, col.key, isTickCell ? null : 'tick', p.tracker_cell_states)
+                          const nextValue = currentCellState === 'tick' ? null : 'tick'
+                          void updateTrackerCellState(p.id, col.key, nextValue, currentPatient?.tracker_cell_states ?? {})
                         } else if (isBM) {
-                          void updateTrackerCellState(p.id, col.key, isYellowCell ? null : 'yellow', p.tracker_cell_states)
+                          const nextValue = currentCellState === 'yellow' ? null : 'yellow'
+                          void updateTrackerCellState(p.id, col.key, nextValue, currentPatient?.tracker_cell_states ?? {})
                         }
                       }) : undefined}
                       title={isBlankOrDash ? 'Click to mark done' : isBM ? 'Click to highlight' : undefined}
