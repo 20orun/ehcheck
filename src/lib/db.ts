@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { CrossConsultation, CrossConsultationStatus, Department, DoctorCode, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority } from '@/types'
+import type { CrossConsultation, CrossConsultationStatus, Department, DoctorCode, Package, PackageStep, Patient, PatientTask, TaskGroup, TaskStatus, Priority, TrackerHighlightedCell } from '@/types'
 
 // ─── Fetch helpers ───────────────────────────────────
 
@@ -552,5 +552,43 @@ export async function deleteCrossConsultationDb(id: string): Promise<void> {
     .from('cross_consultations')
     .delete()
     .eq('id', id)
+  if (error) throw error
+}
+
+// ─── Tracker Highlighted Cells ───────────────────────
+
+export async function fetchTrackerHighlightedCells(patientIds?: string[]): Promise<TrackerHighlightedCell[]> {
+  let query = supabase
+    .from('tracker_highlighted_cells')
+    .select('id, patient_id, consultation_index, created_at')
+  if (patientIds && patientIds.length > 0) {
+    query = query.in('patient_id', patientIds)
+  } else if (patientIds && patientIds.length === 0) {
+    return []
+  }
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    patient_id: r.patient_id,
+    consultation_index: r.consultation_index,
+    created_at: r.created_at,
+  }))
+}
+
+export async function insertTrackerHighlightDb(patientId: string, consultationIndex: number): Promise<void> {
+  const { error } = await supabase.from('tracker_highlighted_cells').insert({
+    patient_id: patientId,
+    consultation_index: consultationIndex,
+  })
+  if (error) throw error
+}
+
+export async function deleteTrackerHighlightDb(patientId: string, consultationIndex: number): Promise<void> {
+  const { error } = await supabase
+    .from('tracker_highlighted_cells')
+    .delete()
+    .eq('patient_id', patientId)
+    .eq('consultation_index', consultationIndex)
   if (error) throw error
 }

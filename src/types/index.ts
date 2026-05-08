@@ -212,3 +212,10 @@ export interface CrossConsultation {
   notes: string
   created_at: string
 }
+
+export interface TrackerHighlightedCell {
+  id: string
+  patient_id: string
+  consultation_index: number
+  created_at: string
+}

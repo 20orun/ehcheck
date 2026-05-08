@@ -416,13 +416,14 @@ function AddEditModal({ patientId, patientName, existing, onClose }: AddEditModa
 }
 
 export default function CrossConsultations() {
-  const { getPatientsWithTasks, state, updateCrossConsultationStatus, deleteCrossConsultation } = useApp()
+  const { getPatientsWithTasks, state, updateCrossConsultationStatus, deleteCrossConsultation, toggleTrackerHighlight, isTrackerCellHighlighted } = useApp()
   const [activeTab, setActiveTab] = useState<TabType>('consultations')
   const [addingForPatientId, setAddingForPatientId] = useState<string | null>(null)
   const [editingCC, setEditingCC] = useState<CrossConsultation | null>(null)
   const [search, setSearch] = useState('')
   const [copiedReport, setCopiedReport] = useState(false)
   const [copiedTracker, setCopiedTracker] = useState(false)
+
 
   const patients = getPatientsWithTasks()
 
@@ -826,8 +827,8 @@ export default function CrossConsultations() {
                       <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Patient Name</th>
                       <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">UHID</th>
                       <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Package</th>
-                      <th className="text-center px-3 py-3 font-semibold text-gray-700 border-l-2 border-gray-300" colSpan={5}>
-                        Consultations (up to 5)
+                      <th className="text-center px-3 py-3 font-semibold text-gray-700" colSpan={5}>
+                        Consultations
                       </th>
                     </tr>
                   </thead>
@@ -838,26 +839,39 @@ export default function CrossConsultations() {
                         <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(r.name)}</td>
                         <td className="px-3 py-3 text-gray-600 font-mono text-xs">{r.uhid}</td>
                         <td className="px-3 py-3 text-gray-700">{r.package_name || '—'}</td>
-                        {[0, 1, 2, 3, 4].map((i) => (
-                          <td
-                            key={i}
-                            className={clsx(
-                              'px-3 py-3 text-gray-700 text-xs',
-                              i === 0 && 'border-l-2 border-gray-300'
-                            )}
-                          >
-                            {r.consultations[i] ? (
-                              <div>
-                                <div className="font-medium">{r.consultations[i].department}</div>
-                                {r.consultations[i].doctor && (
-                                  <div className="text-gray-500 mt-0.5">({r.consultations[i].doctor})</div>
-                                )}
-                              </div>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                        ))}
+                        {[0, 1, 2, 3, 4].map((i) => {
+                          const hasConsultation = r.consultations[i]
+                          const isHighlighted = hasConsultation && isTrackerCellHighlighted(r.id, i)
+                          
+                          const handleClick = () => {
+                            if (hasConsultation) {
+                              toggleTrackerHighlight(r.id, i)
+                            }
+                          }
+                          
+                          return (
+                            <td
+                              key={i}
+                              onClick={handleClick}
+                              className={clsx(
+                                'px-3 py-3 text-gray-700 text-xs transition-all duration-200',
+                                hasConsultation && 'cursor-pointer hover:bg-yellow-100',
+                                isHighlighted && 'bg-[#FFFF00] shadow-[inset_0_0_0_2px_#FFD700]'
+                              )}
+                            >
+                              {hasConsultation ? (
+                                <div>
+                                  <div className="font-medium">{r.consultations[i].department}</div>
+                                  {r.consultations[i].doctor && (
+                                    <div className="text-gray-500 mt-0.5">({r.consultations[i].doctor})</div>
+                                  )}
+                                </div>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
