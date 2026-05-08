@@ -111,6 +111,13 @@ function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
   return latest ? latest.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
 }
 
+/** Return HH:MM of the CONSULT task completion time, or '' if not yet done */
+function getConsultOutTime(patientId: string, patientTasks: PatientTask[]): string {
+  const task = patientTasks.find((t) => t.patient_id === patientId && t.task_group === 'CONSULT' && t.status === 'COMPLETED')
+  if (!task?.completed_at) return ''
+  return new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 const ROWS_PER_SHEET = 20
 const PATIENTS_PER_PAGE = 20
 // 22 columns: A=SL.NO, B=NAME, C=UHID, D=PACKAGE, E–R=14 tracker cols, S=OP, T=IN, U=OUT
@@ -361,7 +368,7 @@ export default function Tracker() {
         ...p,
         pkg,
         package_name: pkg?.name,
-        outTime: getOutTime(p.id, state.patientTasks),
+        outTime: getOutTime(p.id, state.patientTasks) || getConsultOutTime(p.id, state.patientTasks),
         tracker_cell_states: p.tracker_cell_states ?? {},
       }
     })
