@@ -18,21 +18,24 @@ const GROUP_PALETTE = [
 
 export default function DoctorView() {
   const { code } = useParams<{ code: string }>()
-  const { getPatientsWithTasks, startTask, completeTask, isDoctorOffline, toggleDoctorOffline } = useApp()
+  const { getPatientsWithTasks, startConsultTask, completeTask, isDoctorOffline, toggleDoctorOffline } = useApp()
   const doctor = DOCTORS.find((d) => d.code === code)
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_PROGRESS' | 'COMPLETED'>('ALL')
+  const [statusFilter, setStatusFilter] = useState<'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'ALL'>('PENDING')
 
+  // Base pool: all patients where billing is complete (regardless of assigned doctor)
   const patients = useMemo(() => {
     return getPatientsWithTasks()
-      .filter((p) => p.assigned_doctor === code)
+      .filter((p) => {
+        const billingTask = p.tasks.find((t) => t.step_name === 'Billing')
+        return billingTask?.status === 'COMPLETED'
+      })
       .sort((a, b) => {
-        // International patients always appear after non-international
         if (a.is_international !== b.is_international) return a.is_international ? 1 : -1
         return 0
       })
-  }, [getPatientsWithTasks, code])
+  }, [getPatientsWithTasks])
 
   if (!doctor) return <EmptyState message="Doctor not found" />
 
@@ -41,15 +44,20 @@ export default function DoctorView() {
   const isConsultDone = (p: typeof patients[0]) =>
     p.tasks.find((t) => t.task_group === 'CONSULT')?.status === 'COMPLETED'
 
+  const isConsultInProgress = (p: typeof patients[0]) =>
+    p.tasks.find((t) => t.task_group === 'CONSULT')?.status === 'IN_PROGRESS'
+
   const filtered = patients.filter((p) => {
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase()) && !p.uhid.toLowerCase().includes(searchQuery.toLowerCase())) return false
-    if (statusFilter === 'ALL') return true
+    if (statusFilter === 'PENDING') return !isConsultDone(p)
+    if (statusFilter === 'IN_PROGRESS') return isConsultInProgress(p)
     if (statusFilter === 'COMPLETED') return isConsultDone(p)
-    if (statusFilter === 'IN_PROGRESS') return !isConsultDone(p)
-    return true
+    return true // ALL
   })
 
   const completedCount = patients.filter(isConsultDone).length
+  const inProgressCount = patients.filter(isConsultInProgress).length
+  const pendingCount = patients.filter((p) => !isConsultDone(p)).length
 
   return (
     <div className="space-y-6">
@@ -62,7 +70,7 @@ export default function DoctorView() {
           <div>
             <h2 className="text-xl font-bold text-gray-900">{doctor.name}</h2>
             <p className="text-sm text-gray-500">
-              {patients.length} patient{patients.length !== 1 ? 's' : ''} &bull; {completedCount} completed
+              {patients.length} patient{patients.length !== 1 ? 's' : ''} today &bull; {completedCount} consulted
             </p>
           </div>
         </div>
@@ -104,29 +112,30 @@ export default function DoctorView() {
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        {(['ALL', 'IN_PROGRESS', 'COMPLETED'] as const).map((f) => {
-          const label = f === 'ALL' ? 'All' : f === 'IN_PROGRESS' ? 'In Progress' : 'Completed'
-          const count = f === 'ALL' ? patients.length : f === 'COMPLETED' ? completedCount : patients.length - completedCount
-          return (
-            <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
-              className={clsx(
-                'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
-                statusFilter === f
-                  ? 'bg-primary-50 border-primary-300 text-primary-700'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-              )}
-            >
-              {label} ({count})
-            </button>
-          )
-        })}
+        {([
+          { key: 'PENDING', label: 'Pending', count: pendingCount },
+          { key: 'IN_PROGRESS', label: 'In Progress', count: inProgressCount },
+          { key: 'COMPLETED', label: 'Completed', count: completedCount },
+          { key: 'ALL', label: 'All', count: patients.length },
+        ] as const).map(({ key, label, count }) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={clsx(
+              'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
+              statusFilter === key
+                ? 'bg-primary-50 border-primary-300 text-primary-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            )}
+          >
+            {label} ({count})
+          </button>
+        ))}
       </div>
 
       {/* Patient list */}
       {filtered.length === 0 ? (
-        <EmptyState message="No patients assigned to this doctor" />
+        <EmptyState message="No patients pending consultation" />
       ) : (
         <div className="space-y-3">
           {(() => {
@@ -202,7 +211,7 @@ export default function DoctorView() {
                         </span>
                       ) : consultTask && (consultTask.status === 'NOT_STARTED' || consultTask.status === 'DELAYED') ? (
                         <button
-                          onClick={() => startTask(consultTask.id)}
+                          onClick={() => startConsultTask(consultTask.id, code!)}
                           disabled={offline}
                           title={offline ? 'Doctor is offline' : 'Start consultation'}
                           className={clsx(

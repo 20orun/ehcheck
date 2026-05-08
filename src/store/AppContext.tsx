@@ -455,6 +455,7 @@ interface AppContextType {
   updatePatientPpbsTime: (patientId: string, ppbsTime: string | null) => Promise<void>
   updateTrackerCellState: (patientId: string, cellKey: string, value: string | null, currentStates: Record<string, string>) => Promise<void>
   startTask: (taskId: string) => void
+  startConsultTask: (taskId: string, doctorCode: DoctorCode) => void
   completeTask: (taskId: string) => void
   skipTask: (taskId: string) => void
   cancelTask: (taskId: string) => void
@@ -1230,6 +1231,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
   }, [state.patientTasks, state.patients, state.departments, state.doctorStatuses, selectedDate])
 
+  const startConsultTask = useCallback((taskId: string, doctorCode: DoctorCode) => {
+    if (selectedDate !== getTodayStrNow()) return
+    const task = state.patientTasks.find((t) => t.id === taskId)
+    if (!task) return
+
+    // Block if the calling doctor is offline
+    if (doctorCode && state.doctorStatuses[doctorCode]) return
+
+    const patient = state.patients.find((p) => p.id === task.patient_id)
+    if (!patient?.checked_in_at) return
+
+    const patientTasks = state.patientTasks.filter((t) => t.patient_id === task.patient_id)
+    const billingTask = patientTasks.find((t) => t.step_name === 'Billing')
+    if (billingTask && billingTask.status !== 'COMPLETED') return
+
+    const hasActiveTask = patientTasks.some((t) => t.status === 'IN_PROGRESS')
+    if (hasActiveTask) return
+
+    if (!canStartInDepartment(task.department_id, task.patient_id, state.patientTasks)) return
+    if (!arePrerequisitesMet(task, patientTasks)) return
+
+    const ts = new Date().toISOString()
+
+    // Override assigned doctor with the doctor starting the task
+    dispatch({ type: 'UPDATE_ASSIGNED_DOCTOR', payload: { patientId: task.patient_id, doctor: doctorCode } })
+    updateAssignedDoctorDb(task.patient_id, doctorCode).catch((err) =>
+      console.warn('Failed to persist assigned doctor override:', err)
+    )
+
+    dispatch({ type: 'UPDATE_TASK_STATUS', payload: { taskId, status: 'IN_PROGRESS', timestamp: ts } })
+    dbUpdateTaskStatus(taskId, 'IN_PROGRESS', ts).catch((err) =>
+      console.warn('Failed to persist consult task start:', err)
+    )
+  }, [state.patientTasks, state.patients, state.doctorStatuses, selectedDate])
+
   const completeTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
     const ts = new Date().toISOString()
@@ -1244,8 +1280,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const skipTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
-    const ts = new Date().toISOString()
-    dispatch({ type: 'SKIP_TASK', payload: { taskId, timestamp: ts } })
     skipTaskInDb(taskId, ts).catch((err) =>
       console.warn('Failed to persist task skip:', err)
     )
@@ -1575,6 +1609,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         checkInNewPatient,
         updatePatientGroup,
         startTask,
+        startConsultTask,
         completeTask,
         skipTask,
         cancelTask,

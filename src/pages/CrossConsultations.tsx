@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useApp } from '@/store/AppContext'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Trash2, X, Check, BookOpen, Loader2, CheckCircle2, Clock3 } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Check, BookOpen, Loader2, CheckCircle2, Clock3, Search } from 'lucide-react'
 import clsx from 'clsx'
 import ExcelJS from 'exceljs'
 import { EmptyState } from '@/components/ui'
@@ -33,6 +33,13 @@ function uppercaseName(raw: string): string {
   const m = raw.match(/^(Mr\.|Mrs\.|Ms\.|Dr\.|Baby|Fr|Master|Smt\.?)\s*/i)
   if (m) return m[0] + raw.slice(m[0].length).toUpperCase()
   return raw.toUpperCase()
+}
+
+function nameMatchesSearch(name: string, query: string): boolean {
+  if (!query) return true
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return name.toLowerCase().split(/\s+/).some((word) => word.startsWith(q))
 }
 
 function formatDate(date: Date): string {
@@ -422,6 +429,8 @@ export default function CrossConsultations() {
   const [addingForPatientId, setAddingForPatientId] = useState<string | null>(null)
   const [editingCC, setEditingCC] = useState<CrossConsultation | null>(null)
   const [search, setSearch] = useState('')
+  const [reportSearch, setReportSearch] = useState('')
+  const [trackerSearch, setTrackerSearch] = useState('')
   const [copiedReport, setCopiedReport] = useState(false)
   const [copiedTracker, setCopiedTracker] = useState(false)
 
@@ -498,6 +507,14 @@ export default function CrossConsultations() {
       }
     })
     .filter((row): row is CrossTrackerRow => row !== null)
+
+  const filteredReportRows = reportSearch.trim()
+    ? reportRows.filter((r) => nameMatchesSearch(r.name, reportSearch))
+    : reportRows
+
+  const filteredTrackerRows = trackerSearch.trim()
+    ? trackerRows.filter((r) => nameMatchesSearch(r.name, trackerSearch))
+    : trackerRows
 
   function handleReportCopy() {
     copyReportToClipboard(reportRows)
@@ -703,6 +720,16 @@ export default function CrossConsultations() {
                   <p className="text-sm text-gray-500">{dateLabel}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="relative flex items-center">
+                    <Search className="absolute left-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={reportSearch}
+                      onChange={(e) => setReportSearch(e.target.value)}
+                      placeholder="Search patient…"
+                      className="rounded border border-gray-300 bg-white text-sm pl-7 pr-2 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={handleReportCopy}
@@ -734,7 +761,7 @@ export default function CrossConsultations() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {reportRows.map((r, idx) => (
+                    {filteredReportRows.map((r, idx) => (
                       <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
                         <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{r.date}</td>
@@ -749,7 +776,7 @@ export default function CrossConsultations() {
                   <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
                       <td colSpan={7} className="px-3 py-3 text-center font-semibold text-gray-900">
-                        Total Consultations: {reportRows.length}
+                        Total Consultations: {filteredReportRows.length}{reportSearch.trim() ? ` (of ${reportRows.length})` : ''}
                       </td>
                     </tr>
                   </tfoot>
@@ -758,7 +785,7 @@ export default function CrossConsultations() {
 
               {/* Department-wise summary */}
               {(() => {
-                const deptCounts = reportRows.reduce<Record<string, number>>((acc, r) => {
+                const deptCounts = filteredReportRows.reduce<Record<string, number>>((acc, r) => {
                   const key = r.department || '—'
                   acc[key] = (acc[key] ?? 0) + 1
                   return acc
@@ -803,6 +830,16 @@ export default function CrossConsultations() {
                   <p className="text-sm text-gray-500">{dateLabel}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="relative flex items-center">
+                    <Search className="absolute left-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={trackerSearch}
+                      onChange={(e) => setTrackerSearch(e.target.value)}
+                      placeholder="Search patient…"
+                      className="rounded border border-gray-300 bg-white text-sm pl-7 pr-2 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={handleTrackerCopy}
@@ -834,7 +871,7 @@ export default function CrossConsultations() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {trackerRows.map((r, idx) => (
+                    {filteredTrackerRows.map((r, idx) => (
                       <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
                         <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(r.name)}</td>
@@ -889,7 +926,7 @@ export default function CrossConsultations() {
                   <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
                       <td colSpan={9} className="px-3 py-3 text-center font-semibold text-gray-900">
-                        Total Patients: {trackerRows.length}
+                        Total Patients: {filteredTrackerRows.length}{trackerSearch.trim() ? ` (of ${trackerRows.length})` : ''}
                       </td>
                     </tr>
                   </tfoot>

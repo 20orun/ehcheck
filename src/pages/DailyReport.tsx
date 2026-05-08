@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/ui'
 import { CopyableUHID } from '@/components/CopyableUHID'
 import { DOCTORS } from '@/types'
 import type { Package, PatientTask, DoctorCode } from '@/types'
+import { Search } from 'lucide-react'
 
 type ReportPatient = {
   id: string
@@ -16,6 +17,13 @@ type ReportPatient = {
   package_cost: number | null
   in_time: string
   out_time: string
+}
+
+function nameMatchesSearch(name: string, query: string): boolean {
+  if (!query) return true
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return name.toLowerCase().split(/\s+/).some((word) => word.startsWith(q))
 }
 
 /** Strip MALE / FEMALE suffix to get base package name */
@@ -35,10 +43,16 @@ function getDoctorName(code: DoctorCode): string {
   return DOCTORS.find((d) => d.code === code)?.name ?? code
 }
 
+/** Return HH:MM of the CONSULT task completion time, or '' if not yet done */
+function getConsultOutTime(patientId: string, patientTasks: PatientTask[]): string {
+  const task = patientTasks.find((t) => t.patient_id === patientId && t.task_group === 'CONSULT' && t.status === 'COMPLETED')
+  if (!task?.completed_at) return ''
+  return new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 /** Return HH:MM of the last completed task for a patient, only if ALL tasks are completed */
 function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
   const tasks = patientTasks.filter((t) => t.patient_id === patientId && !t.skipped)
-  if (tasks.length === 0) return ''
   if (tasks.some((t) => t.status !== 'COMPLETED')) return ''
   let latest: Date | null = null
   for (const t of tasks) {
@@ -195,11 +209,16 @@ export default function DailyReport() {
         doctor_name: getDoctorName(p.assigned_doctor),
         package_cost: pkg?.price ?? null,
         in_time: new Date(p.checked_in_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-        out_time: p.tracker_cell_states?.['out'] || getOutTime(p.id, state.patientTasks),
+        out_time: p.tracker_cell_states?.['out'] || getConsultOutTime(p.id, state.patientTasks),
       }
     })
 
   const [copied, setCopied] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredPatients = searchQuery.trim()
+    ? patients.filter((p) => nameMatchesSearch(p.name, searchQuery))
+    : patients
 
   function handleCopy() {
     copyToClipboard(patients)
@@ -219,6 +238,16 @@ export default function DailyReport() {
           <p className="text-sm text-gray-500">{dateLabel}</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative flex items-center">
+            <Search className="absolute left-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search patient…"
+              className="rounded border border-gray-300 bg-white text-sm pl-7 pr-2 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
           <button
             type="button"
             onClick={handleCopy}
@@ -251,7 +280,7 @@ export default function DailyReport() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {patients.map((p, idx) => (
+            {filteredPatients.map((p, idx) => (
               <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
                 <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(p.name)}</td>
@@ -260,6 +289,7 @@ export default function DailyReport() {
                 <td className="px-3 py-3 text-gray-700">{p.doctor_name || '—'}</td>
                 <td className="px-3 py-3 text-gray-700 text-right font-mono">{formatCost(p.package_cost)}</td>
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.in_time}</td>
+                <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.consult_time || ''}</td>
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.out_time || ''}</td>
               </tr>
             ))}
@@ -267,7 +297,7 @@ export default function DailyReport() {
           <tfoot>
             <tr className="bg-gray-50 border-t border-gray-200">
               <td colSpan={8} className="px-3 py-3 text-center font-semibold text-gray-900">
-                Total Patients: {patients.length}
+                Total Patients: {filteredPatients.length}{searchQuery.trim() ? ` (of ${patients.length})` : ''}
               </td>
             </tr>
           </tfoot>
@@ -276,7 +306,7 @@ export default function DailyReport() {
 
       {/* Package-wise count summary */}
       {(() => {
-        const pkgCounts = patients.reduce<Record<string, number>>((acc, p) => {
+        const pkgCounts = filteredPatients.reduce<Record<string, number>>((acc, p) => {
           const key = p.package_name ? basePackageName(p.package_name) : '—'
           acc[key] = (acc[key] ?? 0) + 1
           return acc

@@ -5,7 +5,7 @@ import { EmptyState } from '@/components/ui'
 import { CopyableUHID } from '@/components/CopyableUHID'
 import type { Package, PatientTask, DoctorCode } from '@/types'
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Search } from 'lucide-react'
 
 const TRACKER_COLS = [
   { key: 'bloodSample', label: 'BLOOD' },
@@ -77,6 +77,13 @@ function getGroupsWithLunch(patients: CheckedInPatient[]): Set<string> {
     }
   }
   return groups
+}
+
+function nameMatchesSearch(name: string, query: string): boolean {
+  if (!query) return true
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return name.toLowerCase().split(/\s+/).some((word) => word.startsWith(q))
 }
 
 /** Returns '-' if the patient's group has lunch, otherwise returns the patient's package value */
@@ -314,6 +321,8 @@ export default function Tracker() {
   const [editingOutId, setEditingOutId] = useState<string | null>(null)
   const [outInputValue, setOutInputValue] = useState('')
   const outInputRef = useRef<HTMLInputElement>(null)
+  // ─── Search ────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('')
   // ─── Pagination & fullscreen ──────────────────────
   const [currentPage, setCurrentPage] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -333,6 +342,10 @@ export default function Tracker() {
     const id = setInterval(() => setNowIST(getISTTimeString()), 1000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [searchQuery])
 
   const checkedIn: CheckedInPatient[] = state.patients
     .filter((p): p is typeof p & { checked_in_at: string } => p.checked_in_at !== null)
@@ -354,7 +367,10 @@ export default function Tracker() {
     })
 
   const groupsWithLunch = getGroupsWithLunch(checkedIn)
-  const totalPages = Math.max(1, Math.ceil(checkedIn.length / PATIENTS_PER_PAGE))
+  const filteredCheckedIn = searchQuery.trim()
+    ? checkedIn.filter((p) => nameMatchesSearch(p.name, searchQuery))
+    : checkedIn
+  const totalPages = Math.max(1, Math.ceil(filteredCheckedIn.length / PATIENTS_PER_PAGE))
 
   const goToPrev = useCallback(() => setCurrentPage((p) => Math.max(0, p - 1)), [])
   const goToNext = useCallback(() => setCurrentPage((p) => p + 1), [])
@@ -435,7 +451,7 @@ export default function Tracker() {
 
   // ─── Derived values for render ────────────────────
   const safePage = Math.min(currentPage, totalPages - 1)
-  const pagePatients = checkedIn.slice(safePage * PATIENTS_PER_PAGE, (safePage + 1) * PATIENTS_PER_PAGE)
+  const pagePatients = filteredCheckedIn.slice(safePage * PATIENTS_PER_PAGE, (safePage + 1) * PATIENTS_PER_PAGE)
   const anyPpbsYellow = pagePatients.some((p) => isPpbsAlertWindow(p.ppbs_time, nowIST))
 
   // Build a stable group→color-index map (0 or 1) based on encounter order in checkedIn
@@ -462,6 +478,17 @@ export default function Tracker() {
           </div>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
+          {/* Search input */}
+          <div className={`relative flex items-center ${isFullscreen ? '' : ''}`}>
+            <Search className={`absolute left-1.5 text-gray-400 pointer-events-none ${isFullscreen ? 'w-3 h-3' : 'w-3.5 h-3.5'}`} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isFullscreen ? 'Search…' : 'Search patient…'}
+              className={`rounded border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 ${isFullscreen ? 'text-[11px] pl-5 pr-1.5 py-0.5 w-24' : 'text-sm pl-6 pr-2 py-1 w-44'}`}
+            />
+          </div>
           {/* Live clock – fullscreen only */}
           {isFullscreen && (
             <span className="font-mono text-sm font-bold text-gray-700 tabular-nums px-2 py-0.5 rounded bg-gray-100 select-none">
@@ -695,7 +722,7 @@ export default function Tracker() {
                     )
                   }
 
-                  // ── Consultation: cycle I → A → S → (clear) – updates assigned_doctor ──
+                  // ── Consultation: shows assigned_doctor code; click cycles I → A → S → clear ──
                   if (col.key === 'consultation') {
                     const doc = p.assigned_doctor
                     return (
@@ -703,7 +730,6 @@ export default function Tracker() {
                         key="consultation"
                         className={`text-center font-semibold cursor-pointer select-none text-gray-700 ${isFullscreen ? 'px-0.5 py-2' : 'px-2 py-3'}`}
                         onClick={() => throttledCellClick(`${p.id}:consultation`, () => {
-                          // Read current state dynamically
                           const currentPatient = state.patients.find((pt) => pt.id === p.id)
                           const currentDoc = currentPatient?.assigned_doctor ?? null
                           const next: import('@/types').DoctorCode = currentDoc === null ? 'I' : currentDoc === 'I' ? 'A' : currentDoc === 'A' ? 'S' : null
