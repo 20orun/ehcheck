@@ -416,7 +416,7 @@ function AddEditModal({ patientId, patientName, existing, onClose }: AddEditModa
 }
 
 export default function CrossConsultations() {
-  const { getPatientsWithTasks, state, updateCrossConsultationStatus, deleteCrossConsultation, toggleTrackerHighlight, isTrackerCellHighlighted } = useApp()
+  const { getPatientsWithTasks, state, updateCrossConsultationStatus, deleteCrossConsultation, updateTrackerCellState } = useApp()
   const [activeTab, setActiveTab] = useState<TabType>('consultations')
   const [addingForPatientId, setAddingForPatientId] = useState<string | null>(null)
   const [editingCC, setEditingCC] = useState<CrossConsultation | null>(null)
@@ -841,14 +841,20 @@ export default function CrossConsultations() {
                         <td className="px-3 py-3 text-gray-700">{r.package_name || '—'}</td>
                         {[0, 1, 2, 3, 4].map((i) => {
                           const hasConsultation = r.consultations[i]
-                          const isHighlighted = hasConsultation && isTrackerCellHighlighted(r.id, i)
-                          
+                          const patient = state.patients.find(p => p.id === r.id)
+                          const cellKey = `cc_${i}`
+                          const cellState = patient?.tracker_cell_states?.[cellKey] ?? ''
+                          const isYellow = cellState === 'yellow'
+                          const isYellowX = cellState === 'yellow-x'
+
                           const handleClick = () => {
-                            if (hasConsultation) {
-                              toggleTrackerHighlight(r.id, i)
-                            }
+                            if (!hasConsultation) return
+                            const currentPatient = state.patients.find(p => p.id === r.id)
+                            const currentState = currentPatient?.tracker_cell_states?.[cellKey] ?? ''
+                            const next = currentState === '' ? 'yellow' : currentState === 'yellow' ? 'yellow-x' : null
+                            void updateTrackerCellState(r.id, cellKey, next, currentPatient?.tracker_cell_states ?? {})
                           }
-                          
+
                           return (
                             <td
                               key={i}
@@ -856,14 +862,18 @@ export default function CrossConsultations() {
                               className={clsx(
                                 'px-3 py-3 text-gray-700 text-xs transition-all duration-200',
                                 hasConsultation && 'cursor-pointer hover:bg-yellow-100',
-                                isHighlighted && 'bg-[#FFFF00] shadow-[inset_0_0_0_2px_#FFD700]'
+                                isYellow && 'bg-[#FFFF00] shadow-[inset_0_0_0_2px_#FFD700]',
+                                isYellowX && 'bg-[#FFFF00] shadow-[inset_0_0_0_2px_#FFD700]'
                               )}
                             >
                               {hasConsultation ? (
-                                <div>
-                                  <div className="font-medium">{r.consultations[i].department}</div>
+                                <div className="relative">
+                                  {isYellowX && (
+                                    <span className="absolute inset-0 flex items-center justify-center text-gray-800 font-bold text-lg pointer-events-none">✕</span>
+                                  )}
+                                  <div className={clsx('font-medium', isYellowX && 'opacity-40')}>{r.consultations[i].department}</div>
                                   {r.consultations[i].doctor && (
-                                    <div className="text-gray-500 mt-0.5">({r.consultations[i].doctor})</div>
+                                    <div className={clsx('text-gray-500 mt-0.5', isYellowX && 'opacity-40')}>({r.consultations[i].doctor})</div>
                                   )}
                                 </div>
                               ) : (

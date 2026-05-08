@@ -17,7 +17,6 @@ import type {
   PackageStep,
   CrossConsultation,
   CrossConsultationStatus,
-  TrackerHighlightedCell,
 } from '@/types'
 import {
   DEFAULT_ALERT_CONFIG,
@@ -57,9 +56,6 @@ import {
   updateCrossConsultationStatusDb,
   updateCrossConsultationDb,
   deleteCrossConsultationDb,
-  fetchTrackerHighlightedCells,
-  insertTrackerHighlightDb,
-  deleteTrackerHighlightDb,
   updateDeptOfflineStatus,
   fetchDoctorStatuses,
   updateDoctorOfflineStatus,
@@ -79,7 +75,6 @@ interface AppState {
   packageSteps: PackageStep[]
   alertConfig: AlertConfig
   crossConsultations: CrossConsultation[]
-  trackerHighlightedCells: TrackerHighlightedCell[]
   doctorStatuses: Record<string, boolean>
 }
 
@@ -107,9 +102,6 @@ type Action =
   | { type: 'UPDATE_CROSS_CONSULTATION_STATUS'; payload: { id: string; status: CrossConsultationStatus } }
   | { type: 'UPDATE_CROSS_CONSULTATION'; payload: CrossConsultation }
   | { type: 'DELETE_CROSS_CONSULTATION'; payload: { id: string } }
-  | { type: 'SET_TRACKER_HIGHLIGHTED_CELLS'; payload: TrackerHighlightedCell[] }
-  | { type: 'ADD_TRACKER_HIGHLIGHT'; payload: TrackerHighlightedCell }
-  | { type: 'REMOVE_TRACKER_HIGHLIGHT'; payload: { patientId: string; consultationIndex: number } }
   | { type: 'UPDATE_DEPT_OFFLINE'; payload: { deptId: string; isOffline: boolean } }
   | { type: 'UPSERT_PATIENT'; payload: Patient }
   | { type: 'UPSERT_TASK'; payload: PatientTask }
@@ -281,6 +273,8 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_CROSS_CONSULTATIONS':
       return { ...state, crossConsultations: action.payload }
     case 'ADD_CROSS_CONSULTATION':
+      // Guard against duplicates (optimistic local add + realtime echo)
+      if (state.crossConsultations.some((cc) => cc.id === action.payload.id)) return state
       return { ...state, crossConsultations: [...state.crossConsultations, action.payload] }
     case 'UPDATE_CROSS_CONSULTATION_STATUS':
       return {
@@ -300,23 +294,6 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         crossConsultations: state.crossConsultations.filter((cc) => cc.id !== action.payload.id),
-      }
-    case 'SET_TRACKER_HIGHLIGHTED_CELLS':
-      return { ...state, trackerHighlightedCells: action.payload }
-    case 'ADD_TRACKER_HIGHLIGHT':
-      // Guard against duplicates
-      if (state.trackerHighlightedCells.some(
-        (cell) => cell.patient_id === action.payload.patient_id && cell.consultation_index === action.payload.consultation_index
-      )) {
-        return state
-      }
-      return { ...state, trackerHighlightedCells: [...state.trackerHighlightedCells, action.payload] }
-    case 'REMOVE_TRACKER_HIGHLIGHT':
-      return {
-        ...state,
-        trackerHighlightedCells: state.trackerHighlightedCells.filter(
-          (cell) => !(cell.patient_id === action.payload.patientId && cell.consultation_index === action.payload.consultationIndex)
-        ),
       }
     case 'UPDATE_DEPT_OFFLINE':
       return {
@@ -504,9 +481,6 @@ interface AppContextType {
   updateCrossConsultationStatus: (id: string, status: CrossConsultationStatus) => void
   editCrossConsultation: (id: string, departmentName: string, doctorName: string, notes: string) => void
   deleteCrossConsultation: (id: string) => void
-  // Tracker Highlighted Cells
-  toggleTrackerHighlight: (patientId: string, consultationIndex: number) => void
-  isTrackerCellHighlighted: (patientId: string, consultationIndex: number) => boolean
   // Department online/offline
   toggleDeptOffline: (deptId: string) => void
   isDeptOffline: (deptId: string) => boolean
@@ -532,7 +506,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     packageSteps: [],
     alertConfig: DEFAULT_ALERT_CONFIG,
     crossConsultations: [],
-    trackerHighlightedCells: [],
     doctorStatuses: {},
   })
 
@@ -571,9 +544,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const patientIds = data.patients.map((p) => p.id)
         fetchCrossConsultations(patientIds).then((ccs) => {
           if (!cancelled) dispatch({ type: 'SET_CROSS_CONSULTATIONS', payload: ccs })
-        }).catch(console.error)
-        fetchTrackerHighlightedCells(patientIds).then((cells) => {
-          if (!cancelled) dispatch({ type: 'SET_TRACKER_HIGHLIGHTED_CELLS', payload: cells })
         }).catch(console.error)
         fetchDoctorStatuses().then((statuses) => {
           if (!cancelled) dispatch({ type: 'SET_DOCTOR_STATUSES', payload: statuses })
@@ -744,23 +714,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const id = (payload.old as { id: string }).id
           if (id) dispatch({ type: 'DELETE_PACKAGE_STEP', payload: { id } })
-        }
-      )
-      // Tracker highlighted cells sync from any device
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'tracker_highlighted_cells' },
-        (payload) => {
-          const cell = payload.new as TrackerHighlightedCell
-          dispatch({ type: 'ADD_TRACKER_HIGHLIGHT', payload: cell })
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'tracker_highlighted_cells' },
-        (payload) => {
-          const old = payload.old as { patient_id: string; consultation_index: number }
-          dispatch({ type: 'REMOVE_TRACKER_HIGHLIGHT', payload: { patientId: old.patient_id, consultationIndex: old.consultation_index } })
         }
       )
       .subscribe()
@@ -1553,42 +1506,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
-  // ─── Tracker Highlighted Cells actions ───────────
-  const toggleTrackerHighlight = useCallback(
-    (patientId: string, consultationIndex: number) => {
-      const exists = state.trackerHighlightedCells.some(
-        (cell) => cell.patient_id === patientId && cell.consultation_index === consultationIndex
-      )
-      if (exists) {
-        dispatch({ type: 'REMOVE_TRACKER_HIGHLIGHT', payload: { patientId, consultationIndex } })
-        deleteTrackerHighlightDb(patientId, consultationIndex).catch((err) =>
-          console.warn('Failed to remove tracker highlight:', err)
-        )
-      } else {
-        const newCell: TrackerHighlightedCell = {
-          id: crypto.randomUUID(),
-          patient_id: patientId,
-          consultation_index: consultationIndex,
-          created_at: new Date().toISOString(),
-        }
-        dispatch({ type: 'ADD_TRACKER_HIGHLIGHT', payload: newCell })
-        insertTrackerHighlightDb(patientId, consultationIndex).catch((err) =>
-          console.warn('Failed to add tracker highlight:', err)
-        )
-      }
-    },
-    [state.trackerHighlightedCells]
-  )
-
-  const isTrackerCellHighlighted = useCallback(
-    (patientId: string, consultationIndex: number) => {
-      return state.trackerHighlightedCells.some(
-        (cell) => cell.patient_id === patientId && cell.consultation_index === consultationIndex
-      )
-    },
-    [state.trackerHighlightedCells]
-  )
-
   const updatePatientInfo = useCallback(
     (patientId: string, name: string, uhid: string, phone: string | null) => {
       dispatch({ type: 'UPDATE_PATIENT_INFO', payload: { patientId, name, uhid, phone } })
@@ -1684,9 +1601,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateCrossConsultationStatus,
         editCrossConsultation,
         deleteCrossConsultation,
-        // Tracker Highlighted Cells
-        toggleTrackerHighlight,
-        isTrackerCellHighlighted,
         updatePatientInfo,
         updatePatientInternational,
         updatePatientNew,
