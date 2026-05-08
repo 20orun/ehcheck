@@ -160,9 +160,6 @@ export default function DoctorView() {
 
             const renderCard = (patient: typeof filtered[0]) => {
               const groupStatuses = getTaskGroupStatuses(patient.tasks)
-              const completedTasks = patient.tasks.filter((t) => t.status === 'COMPLETED').length
-              const totalTasks = patient.tasks.length
-              const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
               const activeGroups = groupStatuses.filter((g) => g.status === 'IN_PROGRESS')
 
               // Only manage the CONSULT (physician consultation) task
@@ -204,7 +201,6 @@ export default function DoctorView() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-medium text-gray-500">{pct}%</span>
                       {consultDone ? (
                         <span className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700">
                           <CheckCircle2 className="w-3 h-3" />
@@ -212,7 +208,17 @@ export default function DoctorView() {
                         </span>
                       ) : consultTask && (consultTask.status === 'NOT_STARTED' || consultTask.status === 'DELAYED') ? (
                         <button
-                          onClick={() => startConsultTask(consultTask.id, code! as DoctorCode)}
+                          onClick={() => {
+                            const groupMembers = patient.group_id
+                              ? patients.filter((gp) => gp.group_id === patient.group_id)
+                              : [patient]
+                            groupMembers.forEach((gp) => {
+                              const ct = gp.tasks.find((t) => t.task_group === 'CONSULT')
+                              if (ct && (ct.status === 'NOT_STARTED' || ct.status === 'DELAYED')) {
+                                startConsultTask(ct.id, code! as DoctorCode)
+                              }
+                            })
+                          }}
                           disabled={offline}
                           title={offline ? 'Doctor is offline' : 'Start consultation'}
                           className={clsx(
@@ -227,7 +233,17 @@ export default function DoctorView() {
                         </button>
                       ) : consultTask && consultTask.status === 'IN_PROGRESS' ? (
                         <button
-                          onClick={() => completeTask(consultTask.id)}
+                          onClick={() => {
+                            const groupMembers = patient.group_id
+                              ? patients.filter((gp) => gp.group_id === patient.group_id)
+                              : [patient]
+                            groupMembers.forEach((gp) => {
+                              const ct = gp.tasks.find((t) => t.task_group === 'CONSULT')
+                              if (ct && ct.status === 'IN_PROGRESS') {
+                                completeTask(ct.id)
+                              }
+                            })
+                          }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
                         >
                           <CheckCircle2 className="w-3 h-3" />
@@ -235,12 +251,6 @@ export default function DoctorView() {
                         </button>
                       ) : null}
                     </div>
-                  </div>
-                  <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={clsx('h-full rounded-full transition-all', consultDone ? 'bg-green-500' : 'bg-primary-500')}
-                      style={{ width: `${pct}%` }}
-                    />
                   </div>
                   {activeGroups.length > 0 && (
                     <div className="mt-2 flex items-center gap-1.5 flex-wrap">
