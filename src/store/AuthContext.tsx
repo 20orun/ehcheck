@@ -43,7 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // Stale / invalidated refresh token – clear it so the user is sent to login
+        supabase.auth.signOut()
+        setSession(null)
+        setUser(null)
+        setRole(null)
+        setLoading(false)
+        return
+      }
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)

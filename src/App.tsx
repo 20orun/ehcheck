@@ -175,7 +175,10 @@ function DepartmentParamGuard({ children, departmentId, doctorCode, isDepartment
   isDepartment: boolean
 }) {
   const { id } = useParams<{ id: string }>()
-  if (isDepartment && id === departmentId) return <>{children}</>
+  // Phlebotomy (dept-lab) users can also access the PPBS department page
+  const allowedIds = departmentId ? [departmentId] : []
+  if (departmentId === 'dept-lab') allowedIds.push('dept-ppbs')
+  if (isDepartment && id !== undefined && allowedIds.includes(id)) return <>{children}</>
   if (!isDepartment && doctorCode) return <Navigate to={`/doctor/${doctorCode}`} replace />
   return <Navigate to={`/department/${departmentId}`} replace />
 }

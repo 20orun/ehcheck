@@ -68,10 +68,14 @@ export default function Layout() {
       : []
 
   // For department/doctor roles only show their specific entry in the sidebar sections
+  // Phlebotomy (dept-lab) users can also see the PPBS department
+  const allowedDepartmentIds = isDepartment && departmentId
+    ? departmentId === 'dept-lab' ? [departmentId, 'dept-ppbs'] : [departmentId]
+    : []
   const visibleDepartments = (isAdmin || isCoordinator)
     ? state.departments
-    : isDepartment && departmentId
-      ? state.departments.filter((d) => d.id === departmentId)
+    : allowedDepartmentIds.length > 0
+      ? state.departments.filter((d) => allowedDepartmentIds.includes(d.id))
       : []
 
   const visibleDoctors = (isAdmin || isCoordinator)
