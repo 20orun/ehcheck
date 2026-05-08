@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X, Check, BookOpen, Loader2, CheckCircle2, Clock3
 import clsx from 'clsx'
 import ExcelJS from 'exceljs'
 import { EmptyState } from '@/components/ui'
+import { CopyableUHID } from '@/components/CopyableUHID'
 import type { CrossConsultation, CrossConsultationStatus, Package } from '@/types'
 
 type TabType = 'consultations' | 'report' | 'tracker'
@@ -738,7 +739,7 @@ export default function CrossConsultations() {
                         <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
                         <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{r.date}</td>
                         <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(r.name)}</td>
-                        <td className="px-3 py-3 text-gray-600 font-mono text-xs">{r.uhid}</td>
+                        <td className="px-3 py-3 text-gray-600 font-mono text-xs"><CopyableUHID uhid={r.uhid} /></td>
                         <td className="px-3 py-3 text-gray-700">{r.package_name || '—'}</td>
                         <td className="px-3 py-3 text-gray-700">{r.department || '—'}</td>
                         <td className="px-3 py-3 text-gray-700">{r.doctor || '—'}</td>
@@ -837,7 +838,7 @@ export default function CrossConsultations() {
                       <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
                         <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(r.name)}</td>
-                        <td className="px-3 py-3 text-gray-600 font-mono text-xs">{r.uhid}</td>
+                        <td className="px-3 py-3 text-gray-600 font-mono text-xs"><CopyableUHID uhid={r.uhid} /></td>
                         <td className="px-3 py-3 text-gray-700">{r.package_name || '—'}</td>
                         {[0, 1, 2, 3, 4].map((i) => {
                           const hasConsultation = r.consultations[i]

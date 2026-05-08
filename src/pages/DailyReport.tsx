@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ExcelJS from 'exceljs'
 import { useApp } from '@/store/AppContext'
 import { EmptyState } from '@/components/ui'
+import { CopyableUHID } from '@/components/CopyableUHID'
 import { DOCTORS } from '@/types'
 import type { Package, PatientTask, DoctorCode } from '@/types'
 
@@ -254,7 +255,7 @@ export default function DailyReport() {
               <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-3 py-3 text-gray-500">{idx + 1}</td>
                 <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(p.name)}</td>
-                <td className="px-3 py-3 text-gray-600 font-mono text-xs">{p.uhid}</td>
+                <td className="px-3 py-3 text-gray-600 font-mono text-xs"><CopyableUHID uhid={p.uhid} /></td>
                 <td className="px-3 py-3 text-gray-700">{p.package_name || '—'}</td>
                 <td className="px-3 py-3 text-gray-700">{p.doctor_name || '—'}</td>
                 <td className="px-3 py-3 text-gray-700 text-right font-mono">{formatCost(p.package_cost)}</td>

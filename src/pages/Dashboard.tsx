@@ -1,5 +1,6 @@
 import { useApp } from '@/store/AppContext'
 import { KPICard, PriorityBadge, PatientStatusDot } from '@/components/ui'
+import { CopyableUHID } from '@/components/CopyableUHID'
 import { Link } from 'react-router-dom'
 import { Clock, Globe, Search, Users } from 'lucide-react'
 import { useState } from 'react'
@@ -273,7 +274,7 @@ export default function Dashboard() {
                           <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-0.5 ${PACKAGE_BADGE[p.package_name] || 'bg-gray-100 text-gray-600'}`}>{p.package_name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.uhid}</td>
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs"><CopyableUHID uhid={p.uhid} /></td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1 flex-wrap">
                           {p.groupStatuses.map((gs) => (

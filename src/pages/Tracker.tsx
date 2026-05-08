@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import { useApp } from '@/store/AppContext'
 import { Link } from 'react-router-dom'
 import { EmptyState } from '@/components/ui'
+import { CopyableUHID } from '@/components/CopyableUHID'
 import type { Package, PatientTask, DoctorCode } from '@/types'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
@@ -593,7 +594,7 @@ export default function Tracker() {
                     {uppercaseName(p.name)}
                   </Link>
                 </td>
-                <td className={`text-gray-600 font-mono text-xs ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}>{p.uhid}</td>
+                <td className={`text-gray-600 font-mono text-xs ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3'}`}><CopyableUHID uhid={p.uhid} /></td>
                 <td className={`text-gray-700 whitespace-pre-line leading-tight ${isFullscreen ? 'px-1 py-2' : 'px-3 py-3 max-w-30'}`}>{wrapPackageName(p.package_name || '—')}</td>
                 {TRACKER_COLS.map((col) => {
                   if (col.key === 'ppbs') {

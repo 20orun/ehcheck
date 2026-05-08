@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { TaskStatusIcon, EmptyState } from '@/components/ui'
+import { CopyableUHID } from '@/components/CopyableUHID'
 import { Search, Globe, Wifi, WifiOff, Play, CheckCircle2, Users } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { DOCTORS } from '@/types'
@@ -188,7 +189,7 @@ export default function DoctorView() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          UHID: {patient.uhid} &bull; {patient.package_name || 'No package'}
+                          UHID: <CopyableUHID uhid={patient.uhid} /> &bull; {patient.package_name || 'No package'}
                         </p>
                       </div>
                     </div>

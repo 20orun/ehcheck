@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '@/store/AppContext'
 import { KPICard, TaskStatusIcon, EmptyState } from '@/components/ui'
+import { CopyableUHID } from '@/components/CopyableUHID'
 import { Play, CheckCircle2, ArrowUpDown, Globe, Search, Wifi, WifiOff, Users, X, Pencil } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import clsx from 'clsx'
@@ -51,17 +52,9 @@ export default function DepartmentView() {
   const dept = state.departments.find((d) => d.id === id)
   const isBilling = dept?.task_group === 'BILLING'
 
-  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [statusFilter, setStatusFilter] = useState<string>('NOT_COMPLETED')
   const [sortBy, setSortBy] = useState<SortOption>('vip-wait')
   const [searchQuery, setSearchQuery] = useState('')
-
-  // Default sort and filter for billing department: not completed, checked-in earliest
-  useEffect(() => {
-    if (isBilling) {
-      setSortBy('checkin-asc')
-      setStatusFilter('NOT_COMPLETED')
-    }
-  }, [isBilling])
 
   // Edit / billing modal state
   // editEntries: one entry per patient (group billing has multiple)
@@ -74,6 +67,31 @@ export default function DepartmentView() {
   // useMemo kept to satisfy exhaustive-deps (packages list)
   const _packages = useMemo(() => state.packages, [state.packages])
 
+  // Default sort and filter for billing department: not completed, checked-in earliest
+  useEffect(() => {
+    if (isBilling) {
+      setSortBy('checkin-asc')
+      setStatusFilter('NOT_COMPLETED')
+    }
+  }, [isBilling])
+
+  // Get department data (safe to call even if dept is null)
+  const isOffline = isDeptOffline(id!)
+  const queue = getDepartmentQueue(id!)
+  const stats = getDepartmentStats(id!)
+
+  // Determine the NEXT patient (earliest checked-in, not started)
+  const nextPatientId = useMemo(() => {
+    const notStartedCheckedIn = queue
+      .filter((p) => p.currentStep?.status === 'NOT_STARTED' && p.checked_in_at)
+      .sort((a, b) => {
+        const aTime = new Date(a.checked_in_at!).getTime()
+        const bTime = new Date(b.checked_in_at!).getTime()
+        return aTime - bTime
+      })
+    return notStartedCheckedIn.length > 0 ? notStartedCheckedIn[0].id : null
+  }, [queue])
+
   function closeEditModal() {
     setEditEntries(null)
     setEditIsStart(false)
@@ -84,24 +102,8 @@ export default function DepartmentView() {
     setEditEntries((prev) => prev ? prev.map((e) => e.patientId === patientId ? { ...e, ...patch } : e) : prev)
   }
 
+  // Check if department exists AFTER all hooks
   if (!dept) return <EmptyState message="Department not found" />
-
-  const isOffline = isDeptOffline(id!)
-  const queue = getDepartmentQueue(id!)
-  const stats = getDepartmentStats(id!)
-
-  // Determine the NEXT patient for billing (earliest checked-in, not started)
-  const nextPatientId = useMemo(() => {
-    if (!isBilling) return null
-    const notStartedCheckedIn = queue
-      .filter((p) => p.currentStep?.status === 'NOT_STARTED' && p.checked_in_at)
-      .sort((a, b) => {
-        const aTime = new Date(a.checked_in_at!).getTime()
-        const bTime = new Date(b.checked_in_at!).getTime()
-        return aTime - bTime
-      })
-    return notStartedCheckedIn.length > 0 ? notStartedCheckedIn[0].id : null
-  }, [isBilling, queue])
 
   // Filter
   const filteredQueue = queue.filter((p) => {
@@ -329,7 +331,7 @@ export default function DepartmentView() {
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-gray-500">
                             {p.uhid ? (
-                              <span className="font-mono">{p.uhid}</span>
+                              <CopyableUHID uhid={p.uhid} className="font-mono" />
                             ) : (
                               <span className="text-amber-500 italic">No UHID</span>
                             )}
@@ -346,8 +348,8 @@ export default function DepartmentView() {
                       )}
                     </div>
 
-                    {/* NEXT label for billing dept */}
-                    {isBilling && p.id === nextPatientId && (
+                    {/* NEXT label */}
+                    {p.id === nextPatientId && (
                       <span className="shrink-0 inline-flex items-center justify-center px-2 py-1 rounded text-[10px] font-bold bg-blue-500 text-white">
                         NEXT
                       </span>

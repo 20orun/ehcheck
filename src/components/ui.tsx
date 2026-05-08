@@ -35,7 +35,7 @@ export function TaskStatusIcon({ status, isBilling }: { status: StepStatus; isBi
       )
     }
     return (
-      <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-blue-500 text-white shrink-0">
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-yellow-500 text-white shrink-0">
         <ArrowUp className="w-3 h-3" strokeWidth={3} />
       </span>
     )
