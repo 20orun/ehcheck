@@ -1280,6 +1280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const skipTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
+    const ts = new Date().toISOString()
     skipTaskInDb(taskId, ts).catch((err) =>
       console.warn('Failed to persist task skip:', err)
     )

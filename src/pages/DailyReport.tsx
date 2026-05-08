@@ -50,20 +50,6 @@ function getConsultOutTime(patientId: string, patientTasks: PatientTask[]): stri
   return new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-/** Return HH:MM of the last completed task for a patient, only if ALL tasks are completed */
-function getOutTime(patientId: string, patientTasks: PatientTask[]): string {
-  const tasks = patientTasks.filter((t) => t.patient_id === patientId && !t.skipped)
-  if (tasks.some((t) => t.status !== 'COMPLETED')) return ''
-  let latest: Date | null = null
-  for (const t of tasks) {
-    if (t.completed_at) {
-      const d = new Date(t.completed_at)
-      if (!latest || d > latest) latest = d
-    }
-  }
-  return latest ? latest.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
-}
-
 function formatCost(cost: number | null): string {
   if (cost === null || cost === undefined) return '—'
   return String(cost)
@@ -289,7 +275,6 @@ export default function DailyReport() {
                 <td className="px-3 py-3 text-gray-700">{p.doctor_name || '—'}</td>
                 <td className="px-3 py-3 text-gray-700 text-right font-mono">{formatCost(p.package_cost)}</td>
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.in_time}</td>
-                <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.consult_time || ''}</td>
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.out_time || ''}</td>
               </tr>
             ))}

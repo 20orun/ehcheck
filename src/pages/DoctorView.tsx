@@ -5,6 +5,7 @@ import { CopyableUHID } from '@/components/CopyableUHID'
 import { Search, Globe, Wifi, WifiOff, Play, CheckCircle2, Users } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { DOCTORS } from '@/types'
+import type { DoctorCode } from '@/types'
 import { getTaskGroupStatuses } from '@/lib/taskEngine'
 import clsx from 'clsx'
 
@@ -211,7 +212,7 @@ export default function DoctorView() {
                         </span>
                       ) : consultTask && (consultTask.status === 'NOT_STARTED' || consultTask.status === 'DELAYED') ? (
                         <button
-                          onClick={() => startConsultTask(consultTask.id, code!)}
+                          onClick={() => startConsultTask(consultTask.id, code! as DoctorCode)}
                           disabled={offline}
                           title={offline ? 'Doctor is offline' : 'Start consultation'}
                           className={clsx(
