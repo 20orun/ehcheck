@@ -25,18 +25,18 @@ export default function Analytics() {
   // ─── Avg TAT per package ─────────────────────────
   const packageTATs = state.packages.map((pkg) => {
     const pkgPatients = patients.filter((p) => p.package_id === pkg.id)
-    const completed = pkgPatients.filter((p) => isPatientComplete(p.tasks))
+    // TAT = check-in time → CONSULT task completed_at
+    const patientsWithConsultOut = pkgPatients.filter(
+      (p) => p.checked_in_at && p.tasks.some((t) => t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at)
+    )
     const avgTAT =
-      completed.length > 0
+      patientsWithConsultOut.length > 0
         ? Math.round(
-            completed.reduce((sum, p) => {
-              const checkedIn = p.checked_in_at ? new Date(p.checked_in_at).getTime() : null
-              const endTimes = p.tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
-              if (checkedIn && endTimes.length) {
-                return sum + (Math.max(...endTimes) - checkedIn) / 60000
-              }
-              return sum
-            }, 0) / completed.length
+            patientsWithConsultOut.reduce((sum, p) => {
+              const checkedIn = new Date(p.checked_in_at!).getTime()
+              const consultTask = p.tasks.find((t) => t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at)
+              return sum + (new Date(consultTask!.completed_at!).getTime() - checkedIn) / 60000
+            }, 0) / patientsWithConsultOut.length
           )
         : 0
     return { name: pkg.name.replace('Executive Health Check - ', ''), avgTAT, count: pkgPatients.length }

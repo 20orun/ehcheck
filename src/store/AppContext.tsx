@@ -65,6 +65,7 @@ import {
   updateTrackerCellStateDb,
   updatePatientNewDb,
 } from '@/lib/db'
+import { initServerTimeOffset, nowISO, todayISTStr } from '@/lib/serverTime'
 
 // ─── State ───────────────────────────────────────────
 interface AppState {
@@ -514,10 +515,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   // ─── Date-based isolation ────────────────────────
-  const getTodayStr = () => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  }
+  const getTodayStr = () => todayISTStr()
   const [selectedDate, setSelectedDateRaw] = useState(getTodayStr)
   const [clinicDates, setClinicDates] = useState<string[]>([])
   const [holidays, setHolidays] = useState<Set<string>>(() => {
@@ -534,6 +532,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     setLoading(true)
     setError(null)
+    initServerTimeOffset().catch(() => {})
     Promise.all([
       loadAllData(selectedDate),
       fetchClinicDates(),
@@ -769,10 +768,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.doctorStatuses])
 
   /** Guard: block mutations when viewing a past date */
-  const getTodayStrNow = () => {
-    const n = new Date()
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-  }
+  const getTodayStrNow = () => todayISTStr()
 
   // auto-detect delays every 30s
   const intervalRef = useRef<number>(undefined)
@@ -782,7 +778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toDelay.forEach((task) => {
         dispatch({
           type: 'UPDATE_TASK_STATUS',
-          payload: { taskId: task.id, status: 'DELAYED', timestamp: new Date().toISOString() },
+          payload: { taskId: task.id, status: 'DELAYED', timestamp: nowISO() },
         })
       })
     }, 30_000)
@@ -871,19 +867,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (p) => !isPatientComplete(p.tasks) && state.patients.find((sp) => sp.id === p.id)?.checked_in_at
     ).length
 
-    // Average TAT for completed patients (check-in to last task completion)
-    const completedPatients = patients.filter((p) => isPatientComplete(p.tasks))
+    // Average TAT: check-in time → consultation (CONSULT task) out time
+    const patientsWithConsultOut = patients.filter((p) => {
+      const patient = state.patients.find((sp) => sp.id === p.id)
+      const consultTask = p.tasks.find((t) => t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at)
+      return patient?.checked_in_at && consultTask
+    })
     const avgTAT =
-      completedPatients.length > 0
-        ? completedPatients.reduce((sum, p) => {
+      patientsWithConsultOut.length > 0
+        ? patientsWithConsultOut.reduce((sum, p) => {
             const patient = state.patients.find((sp) => sp.id === p.id)
-            const checkedIn = patient?.checked_in_at ? new Date(patient.checked_in_at).getTime() : null
-            const endTimes = p.tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
-            if (checkedIn && endTimes.length) {
-              return sum + (Math.max(...endTimes) - checkedIn) / 60000
-            }
-            return sum
-          }, 0) / completedPatients.length
+            const checkedIn = new Date(patient!.checked_in_at!).getTime()
+            const consultTask = p.tasks.find((t) => t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at)
+            return sum + (new Date(consultTask!.completed_at!).getTime() - checkedIn) / 60000
+          }, 0) / patientsWithConsultOut.length
         : 0
 
     // Bottleneck: department with most delayed/in-progress tasks
@@ -1090,7 +1087,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         assigned_doctor: null,
         priority,
         is_international: false,
-        created_at: new Date().toISOString(),
+        created_at: nowISO(),
         checked_in_at: null,
         clinic_date: clinicDateStr,
         group_id: null,
@@ -1146,7 +1143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const checkInNewPatient = useCallback((name: string) => {
     if (selectedDate < getTodayStrNow()) return
     const patientId = `pat-${crypto.randomUUID()}`
-    const ts = new Date().toISOString()
+    const ts = nowISO()
     const patient: Patient = {
       id: patientId,
       name: name.trim(),
@@ -1221,7 +1218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!canStartInDepartment(task.department_id, task.patient_id, state.patientTasks)) return
     if (!arePrerequisitesMet(task, patientTasks)) return
 
-    const ts = new Date().toISOString()
+    const ts = nowISO()
     dispatch({
       type: 'UPDATE_TASK_STATUS',
       payload: { taskId, status: 'IN_PROGRESS', timestamp: ts },
@@ -1252,7 +1249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!canStartInDepartment(task.department_id, task.patient_id, state.patientTasks)) return
     if (!arePrerequisitesMet(task, patientTasks)) return
 
-    const ts = new Date().toISOString()
+    const ts = nowISO()
 
     // Override assigned doctor with the doctor starting the task
     dispatch({ type: 'UPDATE_ASSIGNED_DOCTOR', payload: { patientId: task.patient_id, doctor: doctorCode } })
@@ -1268,7 +1265,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const completeTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
-    const ts = new Date().toISOString()
+    const ts = nowISO()
     dispatch({
       type: 'UPDATE_TASK_STATUS',
       payload: { taskId, status: 'COMPLETED', timestamp: ts },
@@ -1280,7 +1277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const skipTask = useCallback((taskId: string) => {
     if (selectedDate !== getTodayStrNow()) return
-    const ts = new Date().toISOString()
+    const ts = nowISO()
     skipTaskInDb(taskId, ts).catch((err) =>
       console.warn('Failed to persist task skip:', err)
     )
@@ -1288,7 +1285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkInPatient = useCallback((patientId: string, groupId?: string) => {
     if (selectedDate !== getTodayStrNow()) return
-    const ts = new Date().toISOString()
+    const ts = nowISO()
     dispatch({ type: 'CHECK_IN', payload: { patientId, timestamp: ts, groupId } })
     checkInPatientDb(patientId, ts, groupId).catch((err) =>
       console.warn('Failed to persist check-in:', err)
@@ -1298,7 +1295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const checkInGroup = useCallback((patientIds: string[]) => {
     if (selectedDate !== getTodayStrNow()) return
     if (patientIds.length === 0) return
-    const ts = new Date().toISOString()
+    const ts = nowISO()
     const groupId = `grp-${crypto.randomUUID()}`
     patientIds.forEach((patientId) => {
       dispatch({ type: 'CHECK_IN', payload: { patientId, timestamp: ts, groupId } })
@@ -1361,7 +1358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Preserve the completed billing task from the old tasks
       const oldTasks = state.patientTasks.filter((t) => t.patient_id === patientId)
       const billingTask = oldTasks.find((t) => t.step_name === 'Billing')
-      const now = new Date().toISOString()
+      const now = nowISO()
 
       const newTasks: PatientTask[] = pkgSteps.map((ps, idx) => {
         // Mark the billing step as completed (it was just confirmed via the modal)
@@ -1478,7 +1475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Recalculate after completing
       const updatedTasks = tasks.map((t) =>
         activeTasks.some((a) => a.id === t.id)
-          ? { ...t, status: 'COMPLETED' as TaskStatus, completed_at: new Date().toISOString() }
+          ? { ...t, status: 'COMPLETED' as TaskStatus, completed_at: nowISO() }
           : t
       )
       const result = getNextBestTask(patientId, updatedTasks, state.patientTasks, patient)
@@ -1505,7 +1502,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         doctor_name: doctorName,
         status: 'BOOKED',
         notes,
-        created_at: new Date().toISOString(),
+        created_at: nowISO(),
       }
       dispatch({ type: 'ADD_CROSS_CONSULTATION', payload: cc })
       insertCrossConsultationDb(cc).catch((err) => console.warn('Failed to persist cross consultation:', err))
