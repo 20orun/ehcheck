@@ -440,9 +440,14 @@ export default function CrossConsultations() {
   const patients = getPatientsWithTasks()
 
   const filteredPatients = useMemo(() => {
-    if (!search.trim()) return patients
+    const sorted = [...patients].sort((a, b) => {
+      if (!a.checked_in_at) return 1
+      if (!b.checked_in_at) return -1
+      return new Date(a.checked_in_at).getTime() - new Date(b.checked_in_at).getTime()
+    })
+    if (!search.trim()) return sorted
     const q = search.toLowerCase()
-    return patients.filter((p) => 
+    return sorted.filter((p) => 
       (p.name && p.name.toLowerCase().includes(q)) || 
       (p.uhid && p.uhid.toLowerCase().includes(q))
     )
@@ -464,11 +469,13 @@ export default function CrossConsultations() {
   todayEnd.setDate(todayEnd.getDate() + 1)
 
   const reportRows: CrossReportRow[] = []
-  const todayPatients = state.patients.filter((p) => {
-    if (!p.checked_in_at) return false
-    const checkinDate = new Date(p.checked_in_at)
-    return checkinDate >= todayStart && checkinDate < todayEnd
-  })
+  const todayPatients = state.patients
+    .filter((p) => {
+      if (!p.checked_in_at) return false
+      const checkinDate = new Date(p.checked_in_at)
+      return checkinDate >= todayStart && checkinDate < todayEnd
+    })
+    .sort((a, b) => new Date(a.checked_in_at!).getTime() - new Date(b.checked_in_at!).getTime())
 
   todayPatients.forEach((patient) => {
     const consultations = state.crossConsultations.filter((cc) => cc.patient_id === patient.id)

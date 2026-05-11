@@ -817,14 +817,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Group statuses
       const groupStatuses = getTaskGroupStatuses(tasks)
 
-      // Waiting time: from checked_in_at; freeze at last completion if all mandatory done
-      const allDone = tasks.filter((t) => t.is_mandatory).every((t) => t.status === 'COMPLETED')
+      // Waiting time (TAT): from checked_in_at; freeze at CONSULT out time when available
       let waitingMinutes = 0
       if (p.checked_in_at) {
-        if (allDone) {
-          const completedTimes = tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime())
-          const endTime = completedTimes.length > 0 ? Math.max(...completedTimes) : Date.now()
-          waitingMinutes = Math.floor((endTime - new Date(p.checked_in_at).getTime()) / 60000)
+        const consultTask = tasks.find((t) => t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at)
+        if (consultTask) {
+          waitingMinutes = Math.floor((new Date(consultTask.completed_at!).getTime() - new Date(p.checked_in_at).getTime()) / 60000)
         } else {
           waitingMinutes = Math.floor((Date.now() - new Date(p.checked_in_at).getTime()) / 60000)
         }
