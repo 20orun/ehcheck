@@ -24,6 +24,27 @@ const TRACKER_LABELS: { key: keyof Package; label: string }[] = [
 
 const TRACKER_VALUE_OPTIONS = ['', 'X', 'M', 'B', '-']
 
+const CONSULTATION_DEPARTMENTS = [
+  'Audiology',
+  'Cardiology',
+  'Dental',
+  'Dermatology',
+  'Endocrinology',
+  'ENT',
+  'Gastroenterology',
+  'General Surgery',
+  'Gynaecology',
+  'Nephrology',
+  'Neurology',
+  'Oncology',
+  'Ophthalmology',
+  'Orthopaedics',
+  'Psychiatry',
+  'Pulmonology',
+  'Rheumatology',
+  'Urology',
+]
+
 function generateStepsFromTrackers(packageId: string, trackers: Record<string, string>): PackageStep[] {
   const steps: PackageStep[] = []
   let order = 1
@@ -94,6 +115,9 @@ function PackageFormModal({
     }
     return t
   })
+  const [consultationDepts, setConsultationDepts] = useState<string[]>(
+    existingPkg?.consultation_departments ?? []
+  )
   const [error, setError] = useState('')
 
   const handleSave = () => {
@@ -123,6 +147,7 @@ function PackageFormModal({
       tracker_consultation: trackers.tracker_consultation,
       tracker_dental: trackers.tracker_dental,
       tracker_gynecology: trackers.tracker_gynecology,
+      consultation_departments: consultationDepts,
     }
 
     const steps = generateStepsFromTrackers(pkgId, trackers)
@@ -203,6 +228,46 @@ function PackageFormModal({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Consultation Departments */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cross Consultations Included
+              <span className="ml-2 text-xs font-normal text-gray-400">
+                Patients on this package will automatically receive these consultations
+              </span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {CONSULTATION_DEPARTMENTS.map((dept) => {
+                const selected = consultationDepts.includes(dept)
+                return (
+                  <button
+                    key={dept}
+                    type="button"
+                    onClick={() =>
+                      setConsultationDepts((prev) =>
+                        selected ? prev.filter((d) => d !== dept) : [...prev, dept]
+                      )
+                    }
+                    className={clsx(
+                      'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                      selected
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-primary-400 hover:text-primary-600'
+                    )}
+                  >
+                    {dept}
+                  </button>
+                )
+              })}
+            </div>
+            {consultationDepts.length > 0 && (
+              <p className="mt-2 text-xs text-primary-600">
+                {consultationDepts.length} department{consultationDepts.length > 1 ? 's' : ''} selected:{' '}
+                {consultationDepts.join(', ')}
+              </p>
+            )}
           </div>
 
           {/* Preview generated steps */}
@@ -320,6 +385,25 @@ function PackageRow({
               })}
             </div>
           </div>
+
+          {/* Consultation Departments */}
+          {(pkg.consultation_departments ?? []).length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Cross Consultations Included
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {(pkg.consultation_departments ?? []).map((dept) => (
+                  <span
+                    key={dept}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200"
+                  >
+                    {dept}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Steps */}
           {pkgSteps.length > 0 && (

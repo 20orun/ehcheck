@@ -62,7 +62,9 @@ function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'cen
 }
 
 const COMMON_DEPARTMENTS = [
+  'Audiology',
   'Cardiology',
+  'Dental',
   'Dermatology',
   'Endocrinology',
   'ENT',

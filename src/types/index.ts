@@ -66,6 +66,7 @@ export interface Package {
   tracker_consultation: string
   tracker_dental: string
   tracker_gynecology: string
+  consultation_departments: string[]
 }
 
 export interface PackageStep {

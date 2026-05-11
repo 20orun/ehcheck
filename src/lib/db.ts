@@ -49,7 +49,11 @@ export async function fetchPackages(): Promise<Package[]> {
     .select('*')
     .order('name')
   if (error) throw error
-  return (data ?? []).map((d) => ({ ...d, price: d.price ?? null })) as Package[]
+  return (data ?? []).map((d) => ({
+    ...d,
+    price: d.price ?? null,
+    consultation_departments: (d.consultation_departments as string[]) ?? [],
+  })) as Package[]
 }
 
 export async function fetchPackageSteps(): Promise<PackageStep[]> {
@@ -442,6 +446,7 @@ export async function insertPackageDb(pkg: Package): Promise<void> {
     tracker_lunch: pkg.tracker_lunch,
     tracker_consultation: pkg.tracker_consultation,
     tracker_dental: pkg.tracker_dental,
+    consultation_departments: pkg.consultation_departments ?? [],
   })
   if (error) throw error
 }
@@ -464,6 +469,7 @@ export async function updatePackageDb(pkg: Package): Promise<void> {
     tracker_lunch: pkg.tracker_lunch,
     tracker_consultation: pkg.tracker_consultation,
     tracker_dental: pkg.tracker_dental,
+    consultation_departments: pkg.consultation_departments ?? [],
   }).eq('id', pkg.id)
   if (error) throw error
 }

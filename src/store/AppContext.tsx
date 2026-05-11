@@ -1396,8 +1396,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }).catch(console.error)
         setError('Failed to save package assignment. The page data has been refreshed from the server.')
       })
+
+      // Auto-add cross consultations from the package's consultation_departments
+      const pkg = state.packages.find((p) => p.id === packageId)
+      const depts = pkg?.consultation_departments ?? []
+      if (depts.length > 0) {
+        const existingDepts = new Set(
+          state.crossConsultations
+            .filter((cc) => cc.patient_id === patientId)
+            .map((cc) => cc.department_name)
+        )
+        for (const dept of depts) {
+          if (!existingDepts.has(dept)) {
+            const cc: CrossConsultation = {
+              id: crypto.randomUUID(),
+              patient_id: patientId,
+              department_name: dept,
+              doctor_name: '',
+              status: 'BOOKED',
+              notes: '',
+              created_at: nowISO(),
+            }
+            dispatch({ type: 'ADD_CROSS_CONSULTATION', payload: cc })
+            insertCrossConsultationDb(cc).catch((err) =>
+              console.warn('Failed to persist auto cross consultation:', err)
+            )
+          }
+        }
+      }
     },
-    [state.packageSteps, state.patientTasks, selectedDate]
+    [state.packageSteps, state.patientTasks, state.packages, state.crossConsultations, selectedDate]
   )
 
   const updateAssignedDoctor = useCallback(
@@ -1439,7 +1467,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .then(() => deletePackageStepsDb(pkg.id))
       .then(() => insertPackageStepsDb(steps))
       .catch((err) => console.warn('Failed to persist package update:', err))
-  }, [])
+
+    // Auto-add cross consultations for all patients on this package
+    const depts = pkg.consultation_departments ?? []
+    if (depts.length > 0) {
+      const patientsOnPkg = state.patients.filter((p) => p.package_id === pkg.id)
+      for (const patient of patientsOnPkg) {
+        const existingDepts = new Set(
+          state.crossConsultations
+            .filter((cc) => cc.patient_id === patient.id)
+            .map((cc) => cc.department_name)
+        )
+        for (const dept of depts) {
+          if (!existingDepts.has(dept)) {
+            const cc: CrossConsultation = {
+              id: crypto.randomUUID(),
+              patient_id: patient.id,
+              department_name: dept,
+              doctor_name: '',
+              status: 'BOOKED',
+              notes: '',
+              created_at: nowISO(),
+            }
+            dispatch({ type: 'ADD_CROSS_CONSULTATION', payload: cc })
+            insertCrossConsultationDb(cc).catch((err) =>
+              console.warn('Failed to persist auto cross consultation:', err)
+            )
+          }
+        }
+      }
+    }
+  }, [state.patients, state.crossConsultations])
 
   // resetData: reset all tasks and check-ins in DB, then reload
   const resetData = useCallback(async () => {
