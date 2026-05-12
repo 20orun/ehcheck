@@ -312,9 +312,9 @@ export default function DepartmentView() {
                           {p.name}
                         </Link>
                         {p.is_new && (
-                          <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">
-                            N
-                          </span>
+                          p.is_registered
+                            ? <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">R</span>
+                            : <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-amber-100 text-amber-600 border border-amber-300">N</span>
                         )}
                         {p.is_international && (
                           <span title="International patient">

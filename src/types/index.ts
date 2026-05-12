@@ -103,6 +103,7 @@ export interface Patient {
   ppbs_time: string | null
   tracker_cell_states: Record<string, string>  // 'tick' | 'yellow' per tracker column key
   is_new: boolean
+  is_registered: boolean
 }
 
 export interface PatientTask {

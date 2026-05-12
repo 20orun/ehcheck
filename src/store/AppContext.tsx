@@ -64,6 +64,7 @@ import {
   updatePatientPpbsTimeDb,
   updateTrackerCellStateDb,
   updatePatientNewDb,
+  updatePatientRegisteredDb,
 } from '@/lib/db'
 import { initServerTimeOffset, nowISO, todayISTStr } from '@/lib/serverTime'
 
@@ -110,6 +111,7 @@ type Action =
   | { type: 'UPDATE_PATIENT_INTERNATIONAL'; payload: { patientId: string; isInternational: boolean } }
   | { type: 'UPDATE_PATIENT_PPBS_TIME'; payload: { patientId: string; ppbsTime: string | null } }
   | { type: 'UPDATE_PATIENT_NEW'; payload: { patientId: string; isNew: boolean } }
+  | { type: 'UPDATE_PATIENT_REGISTERED'; payload: { patientId: string; isRegistered: boolean } }
   | { type: 'UPDATE_TRACKER_CELL_STATE'; payload: { patientId: string; cellKey: string; value: string | null } }
   | { type: 'SET_DOCTOR_STATUSES'; payload: Record<string, boolean> }
   | { type: 'UPDATE_DOCTOR_OFFLINE'; payload: { code: string; isOffline: boolean } }
@@ -339,6 +341,15 @@ function reducer(state: AppState, action: Action): AppState {
             : p
         ),
       }
+    case 'UPDATE_PATIENT_REGISTERED':
+      return {
+        ...state,
+        patients: state.patients.map((p) =>
+          p.id === action.payload.patientId
+            ? { ...p, is_registered: action.payload.isRegistered }
+            : p
+        ),
+      }
     case 'UPDATE_TRACKER_CELL_STATE': {
       const { patientId, cellKey, value } = action.payload
       return {
@@ -453,6 +464,7 @@ interface AppContextType {
   updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
   updatePatientInternational: (patientId: string, isInternational: boolean) => void
   updatePatientNew: (patientId: string, isNew: boolean) => void
+  updatePatientRegistered: (patientId: string, isRegistered: boolean) => void
   updatePatientPpbsTime: (patientId: string, ppbsTime: string | null) => Promise<void>
   updateTrackerCellState: (patientId: string, cellKey: string, value: string | null, currentStates: Record<string, string>) => Promise<void>
   startTask: (taskId: string) => void
@@ -1092,6 +1104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ppbs_time: null,
         tracker_cell_states: {},
         is_new: false,
+        is_registered: false,
       }
       let tasks: PatientTask[]
       if (packageId) {
@@ -1158,6 +1171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ppbs_time: null,
       tracker_cell_states: {},
       is_new: false,
+      is_registered: false,
     }
     const tasks: PatientTask[] = [{
       id: `ptask-${crypto.randomUUID()}-billing`,
@@ -1624,6 +1638,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const updatePatientRegistered = useCallback(
+    (patientId: string, isRegistered: boolean) => {
+      dispatch({ type: 'UPDATE_PATIENT_REGISTERED', payload: { patientId, isRegistered } })
+      updatePatientRegisteredDb(patientId, isRegistered).catch((err) =>
+        console.warn('Failed to persist registered flag update:', err)
+      )
+    },
+    []
+  )
+
   const updatePatientPpbsTime = useCallback(
     async (patientId: string, ppbsTime: string | null): Promise<void> => {
       dispatch({ type: 'UPDATE_PATIENT_PPBS_TIME', payload: { patientId, ppbsTime } })
@@ -1693,6 +1717,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updatePatientInfo,
         updatePatientInternational,
         updatePatientNew,
+        updatePatientRegistered,
         updatePatientPpbsTime,
         updateTrackerCellState,
         // Department online/offline

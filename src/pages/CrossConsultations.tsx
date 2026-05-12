@@ -123,7 +123,7 @@ async function downloadCrossReportExcel(rows: CrossReportRow[], dateLabel: strin
       uppercaseName(r.name),
       r.uhid,
       r.package_name || '—',
-      r.department || '—',
+      (r.department || '—').toUpperCase(),
       r.doctor || '—',
     ]
     vals.forEach((v, i) => {
@@ -138,6 +138,7 @@ async function downloadCrossReportExcel(rows: CrossReportRow[], dateLabel: strin
   const totalRowNum = rows.length + 3
   const totalRow = ws.getRow(totalRowNum)
   ws.mergeCells(totalRowNum, 1, totalRowNum, TOTAL_COLS)
+
   const totalCell = totalRow.getCell(1)
   totalCell.value = `TOTAL CONSULTATIONS: ${rows.length}`
   styleCell(totalCell, { ...FONT, size: 11, bold: true }, 'center')
@@ -163,7 +164,7 @@ function copyReportToClipboard(rows: CrossReportRow[]) {
       uppercaseName(r.name),
       r.uhid,
       r.package_name || '—',
-      r.department || '—',
+      (r.department || '—').toUpperCase(),
       r.doctor || '—',
     ].join('\t')
   )
@@ -186,15 +187,15 @@ async function downloadCrossTrackerExcel(rows: CrossTrackerRow[], dateLabel: str
     },
   })
 
-  ws.mergeCells(1, 1, 1, 8)
+  ws.mergeCells(1, 1, 1, 9)
   const titleCell = ws.getCell('A1')
   titleCell.value = `CROSS CONSULTATION TRACKER  (${dateLabel})`
   styleCell(titleCell, { ...FONT, size: 13, bold: true }, 'center')
   ws.getRow(1).height = 26
 
   // Header row with merged CONSULTATIONS
-  ws.mergeCells(2, 4, 2, 8)
-  const headers = ['SL. NO', 'PATIENT NAME', 'UHID', 'CONSULTATIONS (up to 5)']
+  ws.mergeCells(2, 5, 2, 9)
+  const headers = ['SL. NO', 'PATIENT NAME', 'UHID', 'PACKAGE', 'CONSULTATIONS (up to 5)']
   headers.forEach((h, i) => {
     const cell = ws.getCell(2, i + 1)
     cell.value = h
@@ -219,12 +220,16 @@ async function downloadCrossTrackerExcel(rows: CrossTrackerRow[], dateLabel: str
     const uhidCell = row.getCell(3)
     uhidCell.value = r.uhid
     styleCell(uhidCell, FONT, 'left')
+
+    const pkgCell = row.getCell(4)
+    pkgCell.value = r.package_name || '—'
+    styleCell(pkgCell, FONT, 'left')
     
     // Consultation cells (5 columns)
     for (let i = 0; i < 5; i++) {
-      const cell = row.getCell(4 + i)
+      const cell = row.getCell(5 + i)
       if (r.consultations[i]) {
-        const dept = r.consultations[i].department
+        const dept = r.consultations[i].department.toUpperCase()
         const doc = r.consultations[i].doctor
         cell.value = doc ? `${dept}\n(${doc})` : dept
       } else {
@@ -237,13 +242,13 @@ async function downloadCrossTrackerExcel(rows: CrossTrackerRow[], dateLabel: str
 
   const totalRowNum = rows.length + 3
   const totalRow = ws.getRow(totalRowNum)
-  ws.mergeCells(totalRowNum, 1, totalRowNum, 8)
+  ws.mergeCells(totalRowNum, 1, totalRowNum, 9)
   const totalCell = totalRow.getCell(1)
   totalCell.value = `TOTAL PATIENTS: ${rows.length}`
   styleCell(totalCell, { ...FONT, size: 11, bold: true }, 'center')
   totalRow.height = 24
 
-  const colWidths = [6, 28, 14, 18, 18, 18, 18, 18]
+  const colWidths = [6, 28, 14, 20, 18, 18, 18, 18, 18]
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
   const buffer = await wb.xlsx.writeBuffer()
@@ -261,14 +266,14 @@ function copyTrackerToClipboard(rows: CrossTrackerRow[]) {
     const consultCols = []
     for (let i = 0; i < 5; i++) {
       if (r.consultations[i]) {
-        const dept = r.consultations[i].department
+        const dept = r.consultations[i].department.toUpperCase()
         const doc = r.consultations[i].doctor
         consultCols.push(doc ? `${dept} (${doc})` : dept)
       } else {
         consultCols.push('—')
       }
     }
-    return [uppercaseName(r.name), r.uhid, ...consultCols].join('\t')
+    return [uppercaseName(r.name), r.uhid, r.package_name || '—', ...consultCols].join('	')
   })
   const totalRow = `TOTAL PATIENTS:\t${rows.length}`
   const text = [...data, totalRow].join('\n')
@@ -656,7 +661,7 @@ export default function CrossConsultations() {
                           <div key={cc.id} className="px-4 py-3 flex items-start gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-medium text-gray-900">{cc.department_name}</span>
+                                <span className="text-sm font-medium text-gray-900">{cc.department_name.toUpperCase()}</span>
                                 {cc.doctor_name && (
                                   <span className="text-xs text-gray-500">&bull; {cc.doctor_name}</span>
                                 )}
@@ -777,7 +782,7 @@ export default function CrossConsultations() {
                         <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{uppercaseName(r.name)}</td>
                         <td className="px-3 py-3 text-gray-600 font-mono text-xs"><CopyableUHID uhid={r.uhid} /></td>
                         <td className="px-3 py-3 text-gray-700">{r.package_name || '—'}</td>
-                        <td className="px-3 py-3 text-gray-700">{r.department || '—'}</td>
+                        <td className="px-3 py-3 text-gray-700">{r.department ? r.department.toUpperCase() : '—'}</td>
                         <td className="px-3 py-3 text-gray-700">{r.doctor || '—'}</td>
                       </tr>
                     ))}
@@ -918,7 +923,7 @@ export default function CrossConsultations() {
                                   {isYellowX && (
                                     <span className="absolute inset-0 flex items-center justify-center text-gray-800 font-bold text-lg pointer-events-none">✕</span>
                                   )}
-                                  <div className={clsx('font-medium', isYellowX && 'opacity-40')}>{r.consultations[i].department}</div>
+                                  <div className={clsx('font-medium', isYellowX && 'opacity-40')}>{r.consultations[i].department.toUpperCase()}</div>
                                   {r.consultations[i].doctor && (
                                     <div className={clsx('text-gray-500 mt-0.5', isYellowX && 'opacity-40')}>({r.consultations[i].doctor})</div>
                                   )}

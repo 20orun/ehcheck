@@ -36,7 +36,7 @@ const GROUP_COLORS = [
 ]
 
 export default function CheckIn() {
-  const { state, checkInNewPatient, assignGroup, updatePatientGroup, updatePatientInfo, updateCheckInTime, deletePatient, updatePatientNew } = useApp()
+  const { state, checkInNewPatient, assignGroup, updatePatientGroup, updatePatientInfo, updateCheckInTime, deletePatient, updatePatientNew, updatePatientRegistered } = useApp()
 
   const [name, setName] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -243,8 +243,8 @@ export default function CheckIn() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">
-              <div className="shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                <span className="text-base font-bold text-emerald-700">N</span>
+              <div className="shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <span className="text-base font-bold text-amber-600">N</span>
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900">{newPatientModalPatient.name}</p>
@@ -254,11 +254,11 @@ export default function CheckIn() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex gap-3 pt-1">
+            <div className="flex gap-2 pt-1">
               <button
-                onClick={() => { updatePatientNew(newPatientModalPatient.id, false); setNewPatientModalId(null) }}
+                onClick={() => { updatePatientNew(newPatientModalPatient.id, false); updatePatientRegistered(newPatientModalPatient.id, false); setNewPatientModalId(null) }}
                 className={clsx(
-                  'flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors',
+                  'flex-1 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors',
                   !newPatientModalPatient.is_new
                     ? 'border-gray-400 bg-gray-100 text-gray-800'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -267,15 +267,26 @@ export default function CheckIn() {
                 Not New
               </button>
               <button
-                onClick={() => { updatePatientNew(newPatientModalPatient.id, true); setNewPatientModalId(null) }}
+                onClick={() => { updatePatientNew(newPatientModalPatient.id, true); updatePatientRegistered(newPatientModalPatient.id, false); setNewPatientModalId(null) }}
                 className={clsx(
-                  'flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  newPatientModalPatient.is_new
+                  'flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  newPatientModalPatient.is_new && !newPatientModalPatient.is_registered
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100'
+                )}
+              >
+                {newPatientModalPatient.is_new && !newPatientModalPatient.is_registered ? '✓ New (N)' : 'New (N)'}
+              </button>
+              <button
+                onClick={() => { updatePatientNew(newPatientModalPatient.id, true); updatePatientRegistered(newPatientModalPatient.id, true); setNewPatientModalId(null) }}
+                className={clsx(
+                  'flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  newPatientModalPatient.is_registered
                     ? 'bg-emerald-600 text-white'
                     : 'bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100'
                 )}
               >
-                {newPatientModalPatient.is_new ? '✓ Marked as New' : 'Mark as New'}
+                {newPatientModalPatient.is_registered ? '✓ Registered (R)' : 'Registered (R)'}
               </button>
             </div>
           </div>
@@ -462,12 +473,12 @@ export default function CheckIn() {
                     </span>
                   )}
 
-                  {/* N badge — shown when patient is new */}
+                  {/* N / R badge — shown when patient is new or registered */}
                   <span className="w-5 shrink-0 flex items-center justify-center">
                     {patient.is_new && (
-                      <span className="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">
-                        N
-                      </span>
+                      patient.is_registered
+                        ? <span className="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">R</span>
+                        : <span className="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold bg-amber-100 text-amber-600 border border-amber-300">N</span>
                     )}
                   </span>
 
