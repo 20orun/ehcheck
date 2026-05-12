@@ -30,11 +30,38 @@ const DEFAULT_PKG_COLOR = { border: 'border-gray-200', bg: 'bg-white', badge: 'b
 
 // UHID format: uppercase letters + dot + digits (e.g. "RAJH.22493837")
 const UHID_REGEX = /\b([A-Z]+\.\d+)\b/
+// Recognised salutations that can start a patient name
+const SAL_REGEX = /\b(Mr\.?|Mrs\.?|Ms\.?|Dr\.?|Fr\.?|Sr\.?|Baby)\b/i
+/**
+ * Parses a raw text blob (e.g. pasted from another system) and extracts:
+ *   - name: salutation … word ending in Male/Female (suffix stripped)
+ *   - uhid: first token matching the UHID pattern
+ * Either field may be empty-string if not detected.
+ */
 function parseNameUhid(text: string): { name: string; uhid: string } | null {
-  const match = text.match(UHID_REGEX)
-  if (!match) return null
-  const uhid = match[1]
-  const name = text.replace(uhid, '').trim().replace(/\s{2,}/g, ' ')
+  // ── UHID ──────────────────────────────────────────
+  const uhidMatch = text.match(UHID_REGEX)
+  const uhid = uhidMatch ? uhidMatch[1] : ''
+
+  // ── Name ──────────────────────────────────────────
+  let name = ''
+  const salMatch = text.match(SAL_REGEX)
+  if (salMatch && salMatch.index !== undefined) {
+    const fromSal = text.slice(salMatch.index)
+    const tokens = fromSal.split(/\s+/)
+    let endIdx = -1
+    for (let i = 0; i < tokens.length; i++) {
+      if (/(?:Male|Female)$/i.test(tokens[i])) { endIdx = i; break }
+    }
+    if (endIdx >= 0) {
+      const parts = tokens.slice(0, endIdx + 1)
+      // Strip the gender suffix from the last token
+      parts[endIdx] = parts[endIdx].replace(/(?:Male|Female)$/i, '')
+      name = parts.filter(Boolean).join(' ').trim()
+    }
+  }
+
+  if (!name && !uhid) return null
   return { name, uhid }
 }
 
@@ -153,7 +180,10 @@ export default function DepartmentView() {
     setEditCombinedInput((prev) => ({ ...prev, [patientId]: value }))
     const parsed = parseNameUhid(value)
     if (parsed) {
-      updateEntry(patientId, { name: parsed.name, uhid: parsed.uhid })
+      const patch: Partial<{ patientId: string; taskId?: string; name: string; uhid: string; phone: string; pkgId: string | null }> = {}
+      if (parsed.name) patch.name = parsed.name
+      if (parsed.uhid) patch.uhid = parsed.uhid
+      if (Object.keys(patch).length) updateEntry(patientId, patch)
     }
   }
 
