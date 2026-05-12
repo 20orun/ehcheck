@@ -28,6 +28,51 @@ const PACKAGE_COLORS: Record<string, { border: string; bg: string; badge: string
 
 const DEFAULT_PKG_COLOR = { border: 'border-gray-200', bg: 'bg-white', badge: 'bg-gray-100 text-gray-600' }
 
+// UHID format: uppercase letters + dot + digits (e.g. "RAJH.22493837")
+const UHID_REGEX = /\b([A-Z]+\.\d+)\b/
+function parseNameUhid(text: string): { name: string; uhid: string } | null {
+  const match = text.match(UHID_REGEX)
+  if (!match) return null
+  const uhid = match[1]
+  const name = text.replace(uhid, '').trim().replace(/\s{2,}/g, ' ')
+  return { name, uhid }
+}
+
+// Infer gender from name prefix for billing quick-select cards
+function getNameGender(name: string): 'male' | 'female' | 'neutral' {
+  const s = name.trimStart()
+  if (/^(Mr\.|Fr[\s$])/i.test(s) || /^Fr$/i.test(s.split(' ')[0])) return 'male'
+  if (/^(Mrs\.|Ms\.)/i.test(s)) return 'female'
+  return 'neutral'
+}
+
+// Infer gender from package name (e.g. "GOLD MALE", "GOLD FEMALE")
+function getPkgGender(pkgName: string): 'male' | 'female' | 'neutral' {
+  const u = pkgName.toUpperCase()
+  if (/\bFEMALE\b/.test(u)) return 'female'
+  if (/\bMALE\b/.test(u)) return 'male'
+  return 'neutral'
+}
+
+// Map bill_color key → card style classes
+const BILL_COLOR_STYLES: Record<string, { border: string; bg: string; text: string }> = {
+  silver:   { border: 'border-gray-300',    bg: 'bg-gray-50',     text: 'text-gray-700' },
+  gold:     { border: 'border-amber-300',   bg: 'bg-amber-50',    text: 'text-amber-800' },
+  platinum: { border: 'border-violet-300',  bg: 'bg-violet-50',   text: 'text-violet-800' },
+  diamond:  { border: 'border-cyan-300',    bg: 'bg-cyan-50',     text: 'text-cyan-800' },
+  pink:     { border: 'border-pink-300',    bg: 'bg-pink-50',     text: 'text-pink-800' },
+  rose:     { border: 'border-rose-400',    bg: 'bg-rose-50',     text: 'text-rose-900' },
+  emerald:  { border: 'border-emerald-300', bg: 'bg-emerald-50',  text: 'text-emerald-700' },
+}
+
+function getBillingCardStyle(pkg: { name: string; bill_color?: string | null }) {
+  if (pkg.bill_color && BILL_COLOR_STYLES[pkg.bill_color]) return BILL_COLOR_STYLES[pkg.bill_color]
+  // Fallback: derive from existing PACKAGE_COLORS by name
+  const c = PACKAGE_COLORS[pkg.name]
+  if (c) return { border: c.border, bg: c.bg, text: c.badge.split(' ').find((t) => t.startsWith('text-')) ?? 'text-gray-700' }
+  return { border: 'border-gray-200', bg: 'bg-white', text: 'text-gray-600' }
+}
+
 const GROUP_PALETTE = [
   { border: 'border-l-teal-400',   bg: 'bg-teal-50/50',   label: 'text-teal-700',   header: 'bg-teal-50' },
   { border: 'border-l-indigo-400', bg: 'bg-indigo-50/50', label: 'text-indigo-700', header: 'bg-indigo-50' },
@@ -63,6 +108,7 @@ export default function DepartmentView() {
   const [editEntries, setEditEntries] = useState<EditEntry[] | null>(null)
   const [editIsStart, setEditIsStart] = useState(false)
   const [editPkgSearch, setEditPkgSearch] = useState<Record<string, string>>({})
+  const [editCombinedInput, setEditCombinedInput] = useState<Record<string, string>>({})
 
   // useMemo kept to satisfy exhaustive-deps (packages list)
   const _packages = useMemo(() => state.packages, [state.packages])
@@ -96,10 +142,19 @@ export default function DepartmentView() {
     setEditEntries(null)
     setEditIsStart(false)
     setEditPkgSearch({})
+    setEditCombinedInput({})
   }
 
   function updateEntry(patientId: string, patch: Partial<EditEntry>) {
     setEditEntries((prev) => prev ? prev.map((e) => e.patientId === patientId ? { ...e, ...patch } : e) : prev)
+  }
+
+  function handleCombinedInput(patientId: string, value: string) {
+    setEditCombinedInput((prev) => ({ ...prev, [patientId]: value }))
+    const parsed = parseNameUhid(value)
+    if (parsed) {
+      updateEntry(patientId, { name: parsed.name, uhid: parsed.uhid })
+    }
   }
 
   // Check if department exists AFTER all hooks
@@ -477,7 +532,15 @@ export default function DepartmentView() {
                         type="text"
                         value={entry.name}
                         onChange={(e) => updateEntry(entry.patientId, { name: e.target.value })}
-                        placeholder="Patient name"
+                        onClick={async () => {
+                          if (!entry.name.trim()) {
+                            try {
+                              const text = await navigator.clipboard.readText()
+                              if (text.trim()) updateEntry(entry.patientId, { name: text.trim() })
+                            } catch { /* clipboard denied */ }
+                          }
+                        }}
+                        placeholder="Patient name (click to auto-paste)"
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                         autoFocus={idx === 0}
                       />
@@ -490,17 +553,38 @@ export default function DepartmentView() {
                         type="text"
                         value={entry.uhid}
                         onChange={(e) => updateEntry(entry.patientId, { uhid: e.target.value })}
-                        placeholder="UHID"
+                        onClick={async () => {
+                          if (!entry.uhid.trim()) {
+                            try {
+                              const text = await navigator.clipboard.readText()
+                              if (text.trim()) updateEntry(entry.patientId, { uhid: text.trim() })
+                            } catch { /* clipboard denied */ }
+                          }
+                        }}
+                        placeholder="UHID (click to auto-paste)"
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Mobile (optional)</label>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Name + UHID{' '}
+                        <span className="text-gray-400 font-normal">(click to auto-paste from clipboard)</span>
+                      </label>
                       <input
-                        type="tel"
-                        value={entry.phone}
-                        onChange={(e) => updateEntry(entry.patientId, { phone: e.target.value })}
-                        placeholder="Mobile number"
+                        type="text"
+                        value={editCombinedInput[entry.patientId] ?? ''}
+                        placeholder="e.g. RAJH.22493837 John Doe (any order)"
+                        onClick={async () => {
+                          if (!(editCombinedInput[entry.patientId] ?? '').trim()) {
+                            try {
+                              const text = await navigator.clipboard.readText()
+                              if (text.trim()) handleCombinedInput(entry.patientId, text.trim())
+                            } catch {
+                              // clipboard access denied — user can type manually
+                            }
+                          }
+                        }}
+                        onChange={(e) => handleCombinedInput(entry.patientId, e.target.value)}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
@@ -559,6 +643,48 @@ export default function DepartmentView() {
                           <p className="text-sm text-gray-400 text-center py-3">No packages found</p>
                         )}
                       </div>
+                      {/* Quick-select billing cards: shown when name prefix is recognised */}
+                      {(() => {
+                        const nameGender = getNameGender(entry.name)
+                        if (nameGender === 'neutral') return null
+                        const quickPkgs = _packages.filter((pkg) => {
+                          if (!pkg.show_in_billing) return false
+                          const g = getPkgGender(pkg.name)
+                          if (nameGender === 'male') return g !== 'female'
+                          if (nameGender === 'female') return g !== 'male'
+                          return true
+                        })
+                        if (quickPkgs.length === 0) return null
+                        return (
+                          <div className="mt-3">
+                            <p className="text-xs text-gray-400 mb-1.5">Quick select</p>
+                            <div className="flex flex-wrap gap-2">
+                              {quickPkgs.map((pkg) => {
+                                const cs = getBillingCardStyle(pkg)
+                                const isSelected = entry.pkgId === pkg.id
+                                return (
+                                  <button
+                                    key={pkg.id}
+                                    onClick={() => {
+                                      updateEntry(entry.patientId, { pkgId: pkg.id })
+                                      setEditPkgSearch((prev) => ({ ...prev, [entry.patientId]: '' }))
+                                    }}
+                                    className={clsx(
+                                      'px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all',
+                                      isSelected
+                                        ? 'border-primary-500 bg-primary-50 text-primary-800'
+                                        : clsx(cs.border, cs.bg, cs.text, 'hover:scale-105 hover:shadow-sm')
+                                    )}
+                                  >
+                                    {pkg.name}
+                                    {isSelected && ' ✓'}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 )

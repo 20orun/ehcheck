@@ -53,6 +53,8 @@ export async function fetchPackages(): Promise<Package[]> {
     ...d,
     price: d.price ?? null,
     consultation_departments: (d.consultation_departments as string[]) ?? [],
+    show_in_billing: d.show_in_billing ?? false,
+    bill_color: d.bill_color ?? null,
   })) as Package[]
 }
 
@@ -453,6 +455,8 @@ export async function insertPackageDb(pkg: Package): Promise<void> {
     tracker_consultation: pkg.tracker_consultation,
     tracker_dental: pkg.tracker_dental,
     consultation_departments: pkg.consultation_departments ?? [],
+    show_in_billing: pkg.show_in_billing ?? false,
+    bill_color: pkg.bill_color ?? null,
   })
   if (error) throw error
 }
@@ -476,6 +480,8 @@ export async function updatePackageDb(pkg: Package): Promise<void> {
     tracker_consultation: pkg.tracker_consultation,
     tracker_dental: pkg.tracker_dental,
     consultation_departments: pkg.consultation_departments ?? [],
+    show_in_billing: pkg.show_in_billing ?? false,
+    bill_color: pkg.bill_color ?? null,
   }).eq('id', pkg.id)
   if (error) throw error
 }

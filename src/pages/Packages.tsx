@@ -118,6 +118,8 @@ function PackageFormModal({
   const [consultationDepts, setConsultationDepts] = useState<string[]>(
     existingPkg?.consultation_departments ?? []
   )
+  const [showInBilling, setShowInBilling] = useState(existingPkg?.show_in_billing ?? false)
+  const [billColor, setBillColor] = useState<string | null>(existingPkg?.bill_color ?? null)
   const [error, setError] = useState('')
 
   const handleSave = () => {
@@ -148,6 +150,8 @@ function PackageFormModal({
       tracker_dental: trackers.tracker_dental,
       tracker_gynecology: trackers.tracker_gynecology,
       consultation_departments: consultationDepts,
+      show_in_billing: showInBilling,
+      bill_color: billColor,
     }
 
     const steps = generateStepsFromTrackers(pkgId, trackers)
@@ -200,6 +204,72 @@ function PackageFormModal({
                   className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder="0.00"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Billing Popup Options */}
+          <div className="border border-gray-200 rounded-lg p-4 space-y-4">
+            <h4 className="text-sm font-semibold text-gray-700">Billing Popup Options</h4>
+
+            {/* Show in billing toggle */}
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => setShowInBilling((v) => !v)}
+                className={clsx(
+                  'relative w-10 h-5 rounded-full transition-colors',
+                  showInBilling ? 'bg-primary-600' : 'bg-gray-300'
+                )}
+              >
+                <span
+                  className={clsx(
+                    'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+                    showInBilling ? 'translate-x-5' : 'translate-x-0'
+                  )}
+                />
+              </div>
+              <span className="text-sm text-gray-700">
+                Show as quick-select card in billing popup
+              </span>
+            </label>
+
+            {/* Bill color picker */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Card color <span className="text-gray-400 font-normal">(used for quick-select cards)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: 'silver',   label: 'Silver',   cls: 'bg-gray-100 border-gray-400 text-gray-700' },
+                  { key: 'gold',     label: 'Gold',     cls: 'bg-amber-100 border-amber-400 text-amber-800' },
+                  { key: 'platinum', label: 'Platinum', cls: 'bg-violet-100 border-violet-400 text-violet-800' },
+                  { key: 'diamond',  label: 'Diamond',  cls: 'bg-cyan-100 border-cyan-400 text-cyan-800' },
+                  { key: 'pink',     label: 'Pink',     cls: 'bg-pink-100 border-pink-400 text-pink-800' },
+                  { key: 'rose',     label: 'Rose',     cls: 'bg-rose-100 border-rose-400 text-rose-900' },
+                  { key: 'emerald',  label: 'Emerald',  cls: 'bg-emerald-100 border-emerald-400 text-emerald-700' },
+                ] as { key: string; label: string; cls: string }[]).map(({ key, label, cls }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setBillColor(billColor === key ? null : key)}
+                    className={clsx(
+                      'px-3 py-1 rounded-full text-xs font-semibold border-2 transition-all',
+                      cls,
+                      billColor === key ? 'ring-2 ring-offset-1 ring-primary-500 scale-105' : 'opacity-70 hover:opacity-100'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {billColor && (
+                  <button
+                    type="button"
+                    onClick={() => setBillColor(null)}
+                    className="px-3 py-1 rounded-full text-xs font-medium border-2 border-gray-200 text-gray-500 hover:border-gray-400"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
           </div>

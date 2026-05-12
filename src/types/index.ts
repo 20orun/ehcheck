@@ -69,6 +69,8 @@ export interface Package {
   tracker_dental: string
   tracker_gynecology: string
   consultation_departments: string[]
+  show_in_billing: boolean
+  bill_color: string | null
 }
 
 export interface PackageStep {
