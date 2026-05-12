@@ -18,6 +18,8 @@ export function parseRole(role: AppRole | null): {
   if (role === 'admin') return { isAdmin: true, isCoordinator: false, isCheckIn: false, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
   if (role === 'coordinator') return { isAdmin: false, isCoordinator: true, isCheckIn: false, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
   if (role === 'checkin') return { isAdmin: false, isCoordinator: false, isCheckIn: true, isDepartment: false, isDoctor: false, departmentId: null, doctorCode: null }
+  // Billing department gets full coordinator access; home page stays at /department/dept-reg
+  if (role === 'department:dept-reg') return { isAdmin: false, isCoordinator: true, isCheckIn: false, isDepartment: true, isDoctor: false, departmentId: 'dept-reg', doctorCode: null }
   if (role.startsWith('department:')) {
     const departmentId = role.slice('department:'.length)
     return { isAdmin: false, isCoordinator: false, isCheckIn: false, isDepartment: true, isDoctor: false, departmentId, doctorCode: null }

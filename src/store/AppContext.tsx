@@ -57,6 +57,8 @@ import {
   updateCrossConsultationDb,
   deleteCrossConsultationDb,
   updateDeptOfflineStatus,
+  fetchPatients,
+  fetchPatientTasks,
   fetchDoctorStatuses,
   updateDoctorOfflineStatus,
   updatePatientInfoDb,
@@ -578,9 +580,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectedDateRef = useRef(selectedDate)
   useEffect(() => { selectedDateRef.current = selectedDate }, [selectedDate])
 
+  // Refs used for reconnect logic
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFirstSubscribeRef = useRef(true)
+  const channelStatusRef = useRef<string>('SUBSCRIBING')
+
+  // Silent background resync – fetches only patients + tasks to catch up on
+  // events missed while the WebSocket was down. Does NOT trigger a full reload.
+  const silentResync = useCallback(async () => {
+    try {
+      const patients = await fetchPatients(selectedDateRef.current)
+      dispatch({ type: 'SET_PATIENTS', payload: patients })
+      const patientIds = patients.map((p) => p.id)
+      const tasks = await fetchPatientTasks(patientIds)
+      dispatch({ type: 'SET_PATIENT_TASKS', payload: tasks })
+    } catch (err) {
+      console.warn('[Realtime] Silent resync failed:', err)
+    }
+  }, [])
+
   useEffect(() => {
-    const channel = supabase
-      .channel('hcheck-realtime')
+    function subscribeChannel() {
+      // Tear down any existing channel before creating a fresh one
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+      const channel = supabase
+        .channel('hcheck-realtime')
       // Department offline toggle
       .on(
         'postgres_changes',
@@ -728,10 +756,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (id) dispatch({ type: 'DELETE_PACKAGE_STEP', payload: { id } })
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+          channelStatusRef.current = status
+          if (status === 'SUBSCRIBED') {
+            if (!isFirstSubscribeRef.current) {
+              // Reconnected after a drop – silently resync to catch missed events
+              console.log('[Realtime] Reconnected – syncing missed changes')
+              silentResync()
+            }
+            isFirstSubscribeRef.current = false
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('[Realtime] Channel lost (' + status + ') – reconnecting in 3s')
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+            reconnectTimerRef.current = setTimeout(() => { subscribeChannel() }, 3000)
+          }
+        })
+      channelRef.current = channel
+    }
 
-    return () => { supabase.removeChannel(channel) }
-  }, []) // subscribe once on mount; selectedDate accessed via ref
+    subscribeChannel()
+
+    // When the tab becomes visible again, check whether the channel is still
+    // healthy. If it dropped while in the background, reconnect and resync.
+    // This does NOT do a full page reload – only patches in missing events.
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return
+      if (channelStatusRef.current !== 'SUBSCRIBED') {
+        console.log('[Realtime] Tab visible, channel status:', channelStatusRef.current, '– reconnecting')
+        subscribeChannel()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      if (channelRef.current) supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+  }, [silentResync]) // silentResync is a stable callback; selectedDate via ref
 
   const setSelectedDate = useCallback((date: string) => {
     setSelectedDateRaw(date)
