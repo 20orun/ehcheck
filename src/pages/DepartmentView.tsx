@@ -51,12 +51,12 @@ function parseNameUhid(text: string): { name: string; uhid: string } | null {
     const tokens = fromSal.split(/\s+/)
     let endIdx = -1
     for (let i = 0; i < tokens.length; i++) {
-      if (/(?:Male|Female)$/i.test(tokens[i])) { endIdx = i; break }
+      if (/(?:Male|Female)\d*$/i.test(tokens[i])) { endIdx = i; break }
     }
     if (endIdx >= 0) {
       const parts = tokens.slice(0, endIdx + 1)
       // Strip the gender suffix from the last token
-      parts[endIdx] = parts[endIdx].replace(/(?:Male|Female)$/i, '')
+      parts[endIdx] = parts[endIdx].replace(/(?:Male|Female)\d*$/i, '')
       name = parts.filter(Boolean).join(' ').trim()
     }
   }
