@@ -4,6 +4,7 @@ import { StatusBadge, PriorityBadge, EmptyState } from '@/components/ui'
 import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, Loader2, SkipForward, Play, Timer, LogIn, LogOut, XCircle, Trash2, X, Pencil, Check, Wand2, Plus, BookOpen, Clock3, Globe2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useState, useEffect, useMemo } from 'react'
+import { fetchPatientById, fetchPatientTasks } from '@/lib/db'
 import type { CrossConsultation, CrossConsultationStatus, TaskGroup, PatientTask } from '@/types'
 import { getTaskGroupStatuses, isPatientComplete, getAvailableTasks } from '@/lib/taskEngine'
 import { DOCTORS } from '@/types'
@@ -84,8 +85,49 @@ function useElapsedTimer(checkedInAt: string | null, completedAt: string | null)
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation, updatePatientInfo, updatePatientInternational } = useApp()
+  const { getPatientById, startTask, completeTask, skipTask, cancelTask, deletePatient, checkInPatient, undoCheckIn, updateCheckInTime, updateTaskTimes, state, updatePatientPackage, updateAssignedDoctor, getCrossConsultationsForPatient, addCrossConsultation, updateCrossConsultationStatus, editCrossConsultation, deleteCrossConsultation, updatePatientInfo, updatePatientInternational, dispatch } = useApp()
   const patient = getPatientById(id!)
+
+  const [loadingPatient, setLoadingPatient] = useState(false)
+  const [notFound, setNotFound] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!id) return
+    if (patient) {
+      setNotFound(false)
+      setFetchError(null)
+      setLoadingPatient(false)
+      return
+    }
+    setLoadingPatient(true)
+    setNotFound(false)
+    setFetchError(null)
+    ;(async () => {
+      try {
+        const p = await fetchPatientById(id)
+        if (!p) {
+          if (!cancelled) setNotFound(true)
+          return
+        }
+        // Upsert patient and its tasks into app state
+        dispatch({ type: 'UPSERT_PATIENT', payload: p })
+        try {
+          const tasks = await fetchPatientTasks([id])
+          tasks.forEach((t) => dispatch({ type: 'UPSERT_TASK', payload: t }))
+        } catch (err) {
+          console.warn('Failed to fetch tasks for patient:', err)
+        }
+      } catch (err) {
+        console.error('Failed to fetch patient by id:', err)
+        if (!cancelled) setFetchError('Failed to load patient')
+      } finally {
+        if (!cancelled) setLoadingPatient(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id, patient, dispatch])
 
   // Determine if all mandatory tasks are done; if so, freeze timer at last completion time
   const lastCompletedAt = useMemo(() => {
@@ -129,6 +171,15 @@ export default function PatientDetail() {
   }, [billingPkgSearch, state.packages])
 
   if (!patient) {
+    if (loadingPatient) {
+      return (
+        <div className="flex items-center justify-center h-40">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+        </div>
+      )
+    }
+    if (notFound) return <EmptyState message="Patient not found" />
+    if (fetchError) return <EmptyState message={fetchError} />
     return <EmptyState message="Patient not found" />
   }
 

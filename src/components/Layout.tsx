@@ -30,6 +30,7 @@ import clsx from 'clsx'
 
 const ALL_NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, hideForCoordinator: false },
+  { to: '/patients', icon: Users, label: 'All Patients', adminOnly: false, hideForCoordinator: false },
   { to: '/checkin', icon: LogIn, label: 'Check In', adminOnly: false, hideForCoordinator: false },
   { to: '/departments', icon: Building2, label: 'Departments', adminOnly: false, hideForCoordinator: false },
   { to: '/coordinator', icon: Sliders, label: 'Coordinator', adminOnly: false, hideForCoordinator: false },
@@ -56,7 +57,15 @@ export default function Layout() {
   const [nowIST, setNowIST] = useState(getISTNow)
   const accountRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
-  const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = useApp()
+  let appCtx
+  try {
+    appCtx = useApp()
+  } catch (err) {
+    // If AppProvider isn't available yet (transient HMR or auth state change),
+    // render a minimal placeholder to avoid throwing during render.
+    return <div className="flex h-screen items-center justify-center">Loading…</div>
+  }
+  const { state, resetData, loading, selectedDate, isViewingPastDate, setSelectedDate } = appCtx
   const { user, signOut, isAdmin, isCoordinator, isCheckIn, isDepartment, isDoctor, departmentId, doctorCode, role } = useAuth()
   const location = useLocation()
 
@@ -330,6 +339,7 @@ function getPageTitle(path: string): string {
   if (path.startsWith('/doctor/')) return 'Doctor Patients'
   if (path === '/coordinator') return 'Coordinator Panel'
   if (path === '/analytics') return 'Analytics & Reports'
+  if (path === '/patients') return 'All Patients'
   if (path === '/register') return 'Billing'
   if (path === '/tracker') return 'Patient Tracker'
   if (path === '/packages') return 'Packages'

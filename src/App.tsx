@@ -8,6 +8,7 @@ import DepartmentView from '@/pages/DepartmentView'
 import DoctorView from '@/pages/DoctorView'
 import CoordinatorPanel from '@/pages/CoordinatorPanel'
 import Analytics from '@/pages/Analytics'
+import AllPatients from '@/pages/AllPatients'
 import RegisterPatient from '@/pages/RegisterPatient'
 import Tracker from '@/pages/Tracker'
 import Packages from '@/pages/Packages'
@@ -72,6 +73,11 @@ function AppRoutes() {
           {/* Dashboard – admin + coordinator only */}
           <Route path="/"
             element={<Guard allowed={fullAccess}><Dashboard /></Guard>}
+          />
+
+          {/* All Patients – admin + coordinator only */}
+          <Route path="/patients"
+            element={<Guard allowed={fullAccess}><AllPatients /></Guard>}
           />
 
           {/* Patient detail – all roles */}

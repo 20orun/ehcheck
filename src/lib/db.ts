@@ -181,6 +181,68 @@ export async function fetchClinicDates(): Promise<string[]> {
   return unique
 }
 
+/** Fetch a single patient by id (across all clinic dates). Returns null if not found. */
+export async function fetchPatientById(id: string): Promise<Patient | null> {
+  const { data, error } = await supabase
+    .from('patients')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const p = data as any
+  return {
+    id: p.id,
+    name: p.name,
+    uhid: p.uhid,
+    phone: p.phone ?? null,
+    package_id: p.package_id,
+    assigned_doctor: (p.assigned_doctor as DoctorCode) ?? null,
+    priority: p.priority as Priority,
+    is_international: p.is_international ?? false,
+    created_at: p.created_at,
+    checked_in_at: p.checked_in_at ?? null,
+    clinic_date: p.clinic_date,
+    group_id: p.group_id ?? null,
+    ppbs_time: p.ppbs_time ?? null,
+    tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
+    is_new: p.is_new ?? false,
+    is_registered: p.is_registered ?? false,
+  }
+}
+
+/** Search patients by name across all clinic dates. Case-insensitive, partial match. */
+export async function searchPatientsByName(name: string, limit = 200): Promise<Patient[]> {
+  const q = name.trim()
+  if (!q) return []
+  const pattern = `%${q}%`
+  const { data, error } = await supabase
+    .from('patients')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .ilike('name', pattern)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    uhid: p.uhid,
+    phone: p.phone ?? null,
+    package_id: p.package_id,
+    assigned_doctor: (p.assigned_doctor as DoctorCode) ?? null,
+    priority: p.priority as Priority,
+    is_international: p.is_international ?? false,
+    created_at: p.created_at,
+    checked_in_at: p.checked_in_at ?? null,
+    clinic_date: p.clinic_date,
+    group_id: p.group_id ?? null,
+    ppbs_time: p.ppbs_time ?? null,
+    tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
+    is_new: p.is_new ?? false,
+    is_registered: p.is_registered ?? false,
+  }))
+}
+
 // ─── Write helpers ───────────────────────────────────
 
 export async function insertPatient(patient: Patient): Promise<void> {
