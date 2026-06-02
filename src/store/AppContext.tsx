@@ -842,9 +842,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return state.doctorStatuses[code] ?? false
   }, [state.doctorStatuses])
 
-  /** Guard: block mutations when viewing a past date */
-  const getTodayStrNow = () => todayISTStr()
-
   // auto-detect delays every 30s
   const intervalRef = useRef<number>(undefined)
   useEffect(() => {
