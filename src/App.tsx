@@ -14,6 +14,7 @@ import Tracker from '@/pages/Tracker'
 import Packages from '@/pages/Packages'
 import Calendar from '@/pages/Calendar'
 import DailyReport from '@/pages/DailyReport'
+import MonthlyData from '@/pages/MonthlyData'
 import CrossConsultations from '@/pages/CrossConsultations'
 import DepartmentDashboard from '@/pages/DepartmentDashboard'
 import Accounts from '@/pages/Accounts'
@@ -134,6 +135,11 @@ function AppRoutes() {
           {/* Daily Report – admin + coordinator only */}
           <Route path="/daily-report"
             element={<Guard allowed={fullAccess}><DailyReport /></Guard>}
+          />
+
+          {/* Monthly Data – admin + coordinator only */}
+          <Route path="/monthly-data"
+            element={<Guard allowed={fullAccess}><MonthlyData /></Guard>}
           />
 
           {/* Cross Consultations – admin + coordinator only */}

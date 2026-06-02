@@ -17,6 +17,7 @@ import {
   LogOut,
   CalendarDays,
   FileSpreadsheet,
+  CalendarRange,
   Stethoscope,
   BookOpen,
   UsersRound,
@@ -40,6 +41,7 @@ const ALL_NAV_ITEMS = [
   { to: '/packages', icon: PackageIcon, label: 'Packages', adminOnly: false, hideForCoordinator: false },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar', adminOnly: false, hideForCoordinator: false },
   { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report', adminOnly: false, hideForCoordinator: false },
+  { to: '/monthly-data', icon: CalendarRange, label: 'Monthly Data', adminOnly: false, hideForCoordinator: false },
   { to: '/cross-consultations', icon: BookOpen, label: 'Cross Consults', adminOnly: false, hideForCoordinator: false },
   { to: '/accounts', icon: UsersRound, label: 'Accounts', adminOnly: true, hideForCoordinator: false },
 ]

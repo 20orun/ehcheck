@@ -170,6 +170,41 @@ export async function loadAllData(clinicDate?: string): Promise<DbData> {
   return { departments, packages, packageSteps, patients, patientTasks }
 }
 
+/** Fetch patients whose clinic_date falls within a given month (YYYY-MM). */
+export async function fetchPatientsByMonth(yearMonth: string): Promise<Patient[]> {
+  const [year, month] = yearMonth.split('-')
+  const startDate = `${year}-${month}-01`
+  // Get last day of the month
+  const lastDay = new Date(Number(year), Number(month), 0).getDate()
+  const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`
+
+  const { data, error } = await supabase
+    .from('patients')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .gte('clinic_date', startDate)
+    .lte('clinic_date', endDate)
+    .order('created_at')
+  if (error) throw error
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    uhid: p.uhid,
+    phone: p.phone ?? null,
+    package_id: p.package_id,
+    assigned_doctor: (p.assigned_doctor as DoctorCode) ?? null,
+    priority: p.priority as Priority,
+    is_international: p.is_international ?? false,
+    created_at: p.created_at,
+    checked_in_at: p.checked_in_at ?? null,
+    clinic_date: p.clinic_date,
+    group_id: p.group_id ?? null,
+    ppbs_time: p.ppbs_time ?? null,
+    tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
+    is_new: p.is_new ?? false,
+    is_registered: p.is_registered ?? false,
+  }))
+}
+
 /** Get all distinct clinic dates that have patients */
 export async function fetchClinicDates(): Promise<string[]> {
   const { data, error } = await supabase
