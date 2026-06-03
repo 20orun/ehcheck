@@ -17,11 +17,13 @@ import {
   LogOut,
   CalendarDays,
   FileSpreadsheet,
+  Hash,
   CalendarRange,
   Stethoscope,
   BookOpen,
   UsersRound,
   LogIn,
+  Receipt,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/store/AppContext'
@@ -30,17 +32,19 @@ import { DOCTORS } from '@/types'
 import clsx from 'clsx'
 
 const ALL_NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, hideForCoordinator: false },
+  { to: '/department/dept-reg', icon: Receipt, label: 'Billing', adminOnly: false, hideForCoordinator: false },
+  { to: '/tracker', icon: ClipboardList, label: 'Tracker', adminOnly: false, hideForCoordinator: false },
+  { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report', adminOnly: false, hideForCoordinator: false },
+  { to: '/daily-count', icon: Hash, label: 'Daily Count', adminOnly: false, hideForCoordinator: false },
+  { to: '/', icon: LogIn, label: 'Check In', adminOnly: false, hideForCoordinator: false },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, hideForCoordinator: false },
   { to: '/patients', icon: Users, label: 'All Patients', adminOnly: false, hideForCoordinator: false },
-  { to: '/checkin', icon: LogIn, label: 'Check In', adminOnly: false, hideForCoordinator: false },
   { to: '/departments', icon: Building2, label: 'Departments', adminOnly: false, hideForCoordinator: false },
   { to: '/coordinator', icon: Sliders, label: 'Coordinator', adminOnly: false, hideForCoordinator: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', adminOnly: false, hideForCoordinator: true },
-  { to: '/tracker', icon: ClipboardList, label: 'Tracker', adminOnly: false, hideForCoordinator: false },
   { to: '/register', icon: UserPlus, label: 'Register', adminOnly: false, hideForCoordinator: false },
   { to: '/packages', icon: PackageIcon, label: 'Packages', adminOnly: false, hideForCoordinator: false },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar', adminOnly: false, hideForCoordinator: false },
-  { to: '/daily-report', icon: FileSpreadsheet, label: 'Daily Report', adminOnly: false, hideForCoordinator: false },
   { to: '/monthly-data', icon: CalendarRange, label: 'Monthly Data', adminOnly: false, hideForCoordinator: false },
   { to: '/cross-consultations', icon: BookOpen, label: 'Cross Consults', adminOnly: false, hideForCoordinator: false },
   { to: '/accounts', icon: UsersRound, label: 'Accounts', adminOnly: true, hideForCoordinator: false },

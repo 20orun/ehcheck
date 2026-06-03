@@ -14,6 +14,7 @@ import Tracker from '@/pages/Tracker'
 import Packages from '@/pages/Packages'
 import Calendar from '@/pages/Calendar'
 import DailyReport from '@/pages/DailyReport'
+import DailyCount from '@/pages/DailyCount'
 import MonthlyData from '@/pages/MonthlyData'
 import CrossConsultations from '@/pages/CrossConsultations'
 import DepartmentDashboard from '@/pages/DepartmentDashboard'
@@ -60,19 +61,24 @@ function AppRoutes() {
 
   // Default landing path after login
   const homePath = isCheckIn
-    ? '/checkin'
+    ? '/'
     : isDepartment && departmentId
       ? `/department/${departmentId}`
       : isDoctor && doctorCode
         ? `/doctor/${doctorCode}`
-        : '/'
+        : '/dashboard'
 
   return (
     <AppProvider>
       <Routes>
         <Route element={<Layout />}>
-          {/* Dashboard – admin + coordinator only */}
+          {/* Home – Check In for all roles */}
           <Route path="/"
+            element={<Guard allowed={fullAccess || isCheckIn}><CheckIn /></Guard>}
+          />
+
+          {/* Dashboard – admin + coordinator only */}
+          <Route path="/dashboard"
             element={<Guard allowed={fullAccess}><Dashboard /></Guard>}
           />
 
@@ -137,6 +143,11 @@ function AppRoutes() {
             element={<Guard allowed={fullAccess}><DailyReport /></Guard>}
           />
 
+          {/* Daily Count – admin + coordinator only */}
+          <Route path="/daily-count"
+            element={<Guard allowed={fullAccess}><DailyCount /></Guard>}
+          />
+
           {/* Monthly Data – admin + coordinator only */}
           <Route path="/monthly-data"
             element={<Guard allowed={fullAccess}><MonthlyData /></Guard>}
@@ -157,10 +168,8 @@ function AppRoutes() {
             element={<Guard allowed={isAdmin}><Accounts /></Guard>}
           />
 
-          {/* Check In – admin + coordinator + checkin role */}
-          <Route path="/checkin"
-            element={<Guard allowed={fullAccess || isCheckIn}><CheckIn /></Guard>}
-          />
+          {/* Check In – redirect to home (backward compatibility) */}
+          <Route path="/checkin" element={<Navigate to="/" replace />} />
 
           {/* Catch-all: redirect to role's home */}
           <Route path="*" element={<Navigate to={homePath} replace />} />

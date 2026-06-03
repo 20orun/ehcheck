@@ -26,9 +26,13 @@ function nameMatchesSearch(name: string, query: string): boolean {
   return name.toLowerCase().split(/\s+/).some((word) => word.startsWith(q))
 }
 
-/** Strip MALE / FEMALE suffix to get base package name */
+/** Strip MALE / FEMALE / (BELOW 40) / (ABOVE 40) suffix to get base package name */
 function basePackageName(packageName: string): string {
-  return packageName.trim().replace(/\s*(MALE|FEMALE)\s*$/i, '').trim() || packageName
+  return packageName
+    .trim()
+    .replace(/\s*(MALE|FEMALE)\s*$/i, '')
+    .replace(/\s*\((BELOW|ABOVE)\s*40\)\s*$/i, '')
+    .trim() || packageName
 }
 
 /** Uppercase the name part, keep salutation as-is. */
@@ -67,7 +71,7 @@ function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'cen
   cell.alignment = { horizontal: hAlign, vertical: 'middle', wrapText: true }
 }
 
-const COL_HEADERS = ['SL. NO', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', '', 'IN TIME', 'OUT TIME']
+const COL_HEADERS = ['SL. NO', 'DATE', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', '', 'IN TIME', 'OUT TIME', 'TOTAL PATIENTS']
 const TOTAL_COLS = COL_HEADERS.length
 
 async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: string) {
@@ -83,8 +87,8 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
     },
   })
 
-  /* Row 1: Title */
-  ws.mergeCells(1, 1, 1, TOTAL_COLS)
+  /* Row 1: Title (span all columns except the TOTAL PATIENTS column) */
+  ws.mergeCells(1, 1, 1, TOTAL_COLS - 1)
   const titleCell = ws.getCell('A1')
   titleCell.value = `EXECUTIVE HEALTH CHECKUP — DAILY REPORT  (${dateLabel})`
   styleCell(titleCell, { ...FONT, size: 13, bold: true }, 'center')
@@ -106,6 +110,7 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
     const row = ws.getRow(rowNum)
     const vals: (string | number)[] = [
       idx + 1,
+      dateLabel,
       uppercaseName(p.name),
       p.uhid,
       p.package_name || '—',
@@ -114,30 +119,31 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
       '',
       p.in_time,
       p.out_time || '',
+      '', // TOTAL PATIENTS column — merged later
     ]
     vals.forEach((v, i) => {
       const cell = row.getCell(i + 1)
       cell.value = v
-      const hAlign = i === 0 ? 'center' : i === 5 ? 'right' : 'left'
+      const hAlign = i === 0 ? 'center' : i === 6 ? 'right' : 'left'
       styleCell(cell, FONT, hAlign)
-      if (i === 5 && typeof v === 'number') {
+      if (i === 6 && typeof v === 'number') {
         cell.numFmt = '0'
       }
     })
     row.height = 20
   })
 
-  /* Total row */
-  const totalRowNum = patients.length + 3
-  const totalRow = ws.getRow(totalRowNum)
-  ws.mergeCells(totalRowNum, 1, totalRowNum, TOTAL_COLS)
-  const totalCell = totalRow.getCell(1)
-  totalCell.value = `TOTAL PATIENTS: ${patients.length}`
-  styleCell(totalCell, { ...FONT, size: 11, bold: true }, 'center')
-  totalRow.height = 24
+  /* Total Patients — merged column at the far right */
+  const totalColIndex = TOTAL_COLS // last column
+  const lastDataRow = patients.length + 2
+  ws.mergeCells(1, totalColIndex, lastDataRow, totalColIndex)
+  const totalMergeCell = ws.getCell(1, totalColIndex)
+  totalMergeCell.value = patients.length
+  styleCell(totalMergeCell, { ...FONT, size: 16, bold: true }, 'center')
+  totalMergeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
 
   /* Column widths */
-  const colWidths = [6, 28, 14, 24, 24, 14, 4, 10, 10]
+  const colWidths = [6, 22, 28, 14, 24, 24, 14, 4, 10, 10, 14]
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
   /* Download */
@@ -152,9 +158,16 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
 }
 
 // ─── Clipboard ───────────────────────────────────────
-function copyToClipboard(patients: ReportPatient[]) {
-  const rows = patients.map((p) =>
+function copyToClipboard(patients: ReportPatient[], _dateLabel: string) {
+  const count = patients.length
+  const today = new Date()
+  const dd = String(today.getDate()).padStart(2, '0')
+  const mm = String(today.getMonth() + 1).padStart(2, '0')
+  const dateStr = `${dd}-${mm}-${today.getFullYear()}`
+
+  const rows = patients.map((p, idx) =>
     [
+      dateStr,
       uppercaseName(p.name),
       p.uhid,
       p.package_name || '—',
@@ -163,10 +176,10 @@ function copyToClipboard(patients: ReportPatient[]) {
       '',
       p.in_time,
       p.out_time || '',
+      idx === 0 ? count : '', // total count in first data row only
     ].join('\t')
   )
-  const totalRow = `TOTAL PATIENTS:\t${patients.length}`
-  const text = [...rows, totalRow].join('\n')
+  const text = rows.join('\n')
   navigator.clipboard.writeText(text)
 }
 
@@ -207,7 +220,7 @@ export default function DailyReport() {
     : patients
 
   function handleCopy() {
-    copyToClipboard(patients)
+    copyToClipboard(patients, dateLabel)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
