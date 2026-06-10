@@ -1147,6 +1147,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => {
       const patientId = `pat-${crypto.randomUUID()}`
       const clinicDateStr = selectedDate
+      const isInternational = packageId
+        ? state.packages.find((p) => p.id === packageId)?.package_category === 'International'
+        : false
       const patient: Patient = {
         id: patientId,
         name,
@@ -1155,7 +1158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         package_id: packageId,
         assigned_doctor: null,
         priority,
-        is_international: false,
+        is_international: isInternational,
         created_at: nowISO(),
         checked_in_at: null,
         clinic_date: clinicDateStr,
@@ -1446,8 +1449,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
 
+      // Auto-mark patient as international if the package is international
+      const pkg = state.packages.find((p) => p.id === packageId)
+      const isInternational = pkg?.package_category === 'International'
+
       dispatch({ type: 'UPDATE_PATIENT_PACKAGE', payload: { patientId, packageId, tasks: newTasks, assignedDoctor } })
-      updatePatientPackageDb(patientId, packageId, newTasks, assignedDoctor).catch((err) => {
+      if (isInternational) {
+        dispatch({ type: 'UPDATE_PATIENT_INTERNATIONAL', payload: { patientId, isInternational: true } })
+      }
+      updatePatientPackageDb(patientId, packageId, newTasks, assignedDoctor, isInternational || undefined).catch((err) => {
         console.error('Failed to persist package update:', err)
         // DB write failed – reload authoritative data from server to restore correct state
         loadAllData(selectedDate).then((data) => {
@@ -1457,7 +1467,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
 
       // Auto-add cross consultations from the package's consultation_departments
-      const pkg = state.packages.find((p) => p.id === packageId)
       const depts = pkg?.consultation_departments ?? []
       if (depts.length > 0) {
         const existingDepts = new Set(

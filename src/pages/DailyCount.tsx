@@ -1,7 +1,7 @@
 import { useApp } from '@/store/AppContext'
 import { EmptyState } from '@/components/ui'
 import type { Package } from '@/types'
-import { Utensils, Activity, Waves, Heart } from 'lucide-react'
+import { Utensils, Activity, Waves, Heart, HeartPulse, Globe, Building2, Home } from 'lucide-react'
 
 // ─── Helpers (mirrored from Tracker / DailyReport) ──
 
@@ -10,6 +10,7 @@ const TRACKER_KEY_MAP: Record<string, keyof Package> = {
   tmt: 'tracker_tmt',
   pft: 'tracker_pft',
   ecg: 'tracker_ecg',
+  echo: 'tracker_echo',
 }
 
 function getTrackerCellValue(pkg: Package | undefined, key: string): string {
@@ -91,13 +92,26 @@ export default function DailyCount() {
     return <EmptyState message="No checked-in patients yet" />
   }
 
-  // ─── Package-wise counts ───────────────────────────
-  const pkgCounts = checkedIn.reduce<Record<string, number>>((acc, p) => {
+  // ─── Package-wise counts with category ────────────
+  const CATEGORY_ORDER: Record<string, number> = { Domestic: 0, International: 1, Corporate: 2 }
+  const CATEGORY_COLORS: Record<string, string> = {
+    Domestic: 'bg-green-50 text-green-800',
+    International: 'bg-blue-50 text-blue-800',
+    Corporate: 'bg-amber-50 text-amber-800',
+  }
+  const pkgCategoryMap = checkedIn.reduce<Record<string, { count: number; category: string }>>((acc, p) => {
     const key = p.package_name ? basePackageName(p.package_name) : '—'
-    acc[key] = (acc[key] ?? 0) + 1
+    if (!acc[key]) {
+      acc[key] = { count: 0, category: p.pkg?.package_category || 'Corporate' }
+    }
+    acc[key].count += 1
     return acc
   }, {})
-  const pkgEntries = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1])
+  const pkgEntries = Object.entries(pkgCategoryMap).sort((a, b) => {
+    const orderDiff = (CATEGORY_ORDER[a[1].category] ?? 99) - (CATEGORY_ORDER[b[1].category] ?? 99)
+    if (orderDiff !== 0) return orderDiff
+    return b[1].count - a[1].count
+  })
 
   // ─── Individual item counts ────────────────────────
   const groupsWithLunch = getGroupsWithLunch(checkedIn)
@@ -105,12 +119,22 @@ export default function DailyCount() {
   const tmtCount = checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'tmt') === '-').length
   const pftCount = checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'pft') === '-').length
   const ecgCount = checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'ecg') === '-').length
+  const echoCount = checkedIn.filter((p) => getTrackerCellValue(p.pkg, 'echo') === '-').length
+
+  // ─── Package category counts ───────────────────────
+  const domesticCount = checkedIn.filter((p) => p.pkg?.package_category === 'Domestic').length
+  const corporateCount = checkedIn.filter((p) => (!p.pkg?.package_category || p.pkg?.package_category === 'Corporate')).length
+  const internationalCount = checkedIn.filter((p) => p.pkg?.package_category === 'International').length
 
   const countCards = [
+    { label: 'Domestic', count: domesticCount, icon: Home, color: 'bg-green-50 border-green-200 text-green-800' },
+    { label: 'Corporate', count: corporateCount, icon: Building2, color: 'bg-amber-50 border-amber-200 text-amber-800' },
+    { label: 'International', count: internationalCount, icon: Globe, color: 'bg-blue-50 border-blue-200 text-blue-800' },
     { label: 'Lunch', count: lunchCount, icon: Utensils, color: 'bg-green-50 border-green-200 text-green-800' },
     { label: 'TMT', count: tmtCount, icon: Activity, color: 'bg-blue-50 border-blue-200 text-blue-800' },
     { label: 'PFT', count: pftCount, icon: Waves, color: 'bg-purple-50 border-purple-200 text-purple-800' },
     { label: 'ECG', count: ecgCount, icon: Heart, color: 'bg-red-50 border-red-200 text-red-800' },
+    { label: 'ECHO', count: echoCount, icon: HeartPulse, color: 'bg-pink-50 border-pink-200 text-pink-800' },
   ]
 
   return (
@@ -122,7 +146,7 @@ export default function DailyCount() {
       </div>
 
       {/* Count cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {countCards.map((card) => (
           <div
             key={card.label}
@@ -149,12 +173,25 @@ export default function DailyCount() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {pkgEntries.map(([pkg, count]) => (
-                <tr key={pkg} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-2.5 text-gray-800">{pkg}</td>
-                  <td className="px-4 py-2.5 text-center font-semibold text-gray-900">{count}</td>
-                </tr>
-              ))}
+              {pkgEntries.reduce<React.ReactNode[]>((rows, [pkg, { count, category }], idx, arr) => {
+                const prevCat = idx > 0 ? arr[idx - 1][1].category : null
+                if (category !== prevCat) {
+                  rows.push(
+                    <tr key={`cat-${category}`} className={CATEGORY_COLORS[category] || 'bg-gray-50 text-gray-700'}>
+                      <td colSpan={2} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider">
+                        {category}
+                      </td>
+                    </tr>
+                  )
+                }
+                rows.push(
+                  <tr key={pkg} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-2.5 text-gray-800 pl-6">{pkg}</td>
+                    <td className="px-4 py-2.5 text-center font-semibold text-gray-900">{count}</td>
+                  </tr>
+                )
+                return rows
+              }, [])}
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t border-gray-200">

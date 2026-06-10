@@ -52,6 +52,7 @@ export async function fetchPackages(): Promise<Package[]> {
   return (data ?? []).map((d) => ({
     ...d,
     price: d.price ?? null,
+    package_category: d.package_category ?? 'Corporate',
     consultation_departments: (d.consultation_departments as string[]) ?? [],
     show_in_billing: d.show_in_billing ?? false,
     bill_color: d.bill_color ?? null,
@@ -445,11 +446,13 @@ export async function updatePatientPackageDb(
   patientId: string,
   packageId: string,
   newTasks: PatientTask[],
-  assignedDoctor?: DoctorCode
+  assignedDoctor?: DoctorCode,
+  isInternational?: boolean,
 ): Promise<void> {
-  // Update the patient's package and doctor
+  // Update the patient's package, doctor, and international flag
   const updateData: Record<string, unknown> = { package_id: packageId }
   if (assignedDoctor !== undefined) updateData.assigned_doctor = assignedDoctor
+  if (isInternational !== undefined) updateData.is_international = isInternational
   const { error: pkgError } = await supabase
     .from('patients')
     .update(updateData)
@@ -537,6 +540,7 @@ export async function insertPackageDb(pkg: Package): Promise<void> {
     id: pkg.id,
     name: pkg.name,
     price: pkg.price,
+    package_category: pkg.package_category ?? 'Corporate',
     tracker_blood_sample: pkg.tracker_blood_sample,
     tracker_usg: pkg.tracker_usg,
     tracker_breakfast: pkg.tracker_breakfast,
@@ -562,6 +566,7 @@ export async function updatePackageDb(pkg: Package): Promise<void> {
   const { error } = await supabase.from('packages').update({
     name: pkg.name,
     price: pkg.price,
+    package_category: pkg.package_category ?? 'Corporate',
     tracker_blood_sample: pkg.tracker_blood_sample,
     tracker_usg: pkg.tracker_usg,
     tracker_breakfast: pkg.tracker_breakfast,

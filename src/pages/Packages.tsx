@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useApp } from '@/store/AppContext'
 import { Search, ChevronDown, ChevronRight, Package as PackageIcon, Plus, Pencil, X, IndianRupee } from 'lucide-react'
-import type { Package, PackageStep, TaskGroup } from '@/types'
+import type { Package, PackageStep, TaskGroup, PackageCategory } from '@/types'
 import clsx from 'clsx'
 
 const TRACKER_LABELS: { key: keyof Package; label: string }[] = [
@@ -120,6 +120,7 @@ function PackageFormModal({
   )
   const [showInBilling, setShowInBilling] = useState(existingPkg?.show_in_billing ?? false)
   const [billColor, setBillColor] = useState<string | null>(existingPkg?.bill_color ?? null)
+  const [category, setCategory] = useState<PackageCategory>(existingPkg?.package_category ?? 'Corporate')
   const [error, setError] = useState('')
 
   const handleSave = () => {
@@ -152,6 +153,7 @@ function PackageFormModal({
       consultation_departments: consultationDepts,
       show_in_billing: showInBilling,
       bill_color: billColor,
+      package_category: category,
     }
 
     const steps = generateStepsFromTrackers(pkgId, trackers)
@@ -205,6 +207,32 @@ function PackageFormModal({
                   placeholder="0.00"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Package Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Package Category</label>
+            <div className="flex gap-2">
+              {(['Domestic', 'Corporate', 'International'] as PackageCategory[]).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategory(cat)}
+                  className={clsx(
+                    'px-4 py-2 rounded-lg text-sm font-medium border-2 transition-all',
+                    category === cat
+                      ? cat === 'Domestic'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : cat === 'International'
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-amber-500 bg-amber-50 text-amber-700'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                  )}
+                >
+                  {cat}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -411,6 +439,14 @@ function PackageRow({
           )}
           <PackageIcon className="w-5 h-5 text-primary-500 shrink-0" />
           <span className="font-medium text-gray-900 flex-1">{pkg.name}</span>
+          <span className={clsx(
+            'text-xs font-semibold px-2 py-0.5 rounded-full',
+            pkg.package_category === 'Domestic' && 'bg-green-100 text-green-700',
+            pkg.package_category === 'International' && 'bg-blue-100 text-blue-700',
+            (!pkg.package_category || pkg.package_category === 'Corporate') && 'bg-amber-100 text-amber-700',
+          )}>
+            {pkg.package_category || 'Corporate'}
+          </span>
           {pkg.price != null && (
             <span className="text-sm text-emerald-600 font-medium mr-2">
               ₹{pkg.price.toLocaleString('en-IN')}

@@ -49,10 +49,13 @@ export interface Department {
   is_offline: boolean
 }
 
+export type PackageCategory = 'Domestic' | 'Corporate' | 'International'
+
 export interface Package {
   id: string
   name: string
   price: number | null
+  package_category: PackageCategory
   tracker_blood_sample: string
   tracker_usg: string
   tracker_breakfast: string
