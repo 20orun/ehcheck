@@ -72,7 +72,7 @@ function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'cen
   cell.alignment = { horizontal: hAlign, vertical: 'middle', wrapText: true }
 }
 
-const COL_HEADERS = ['SL. NO', 'DATE', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', 'OP BILLS', '', 'IN TIME', 'OUT TIME', 'TOTAL PATIENTS']
+const COL_HEADERS = ['SL. NO', 'DATE', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', 'OP BILLS', 'IN TIME', 'OUT TIME']
 const TOTAL_COLS = COL_HEADERS.length
 
 async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: string) {
@@ -88,8 +88,8 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
     },
   })
 
-  /* Row 1: Title (span all columns except the TOTAL PATIENTS column) */
-  ws.mergeCells(1, 1, 1, TOTAL_COLS - 1)
+  /* Row 1: Title (span all columns) */
+  ws.mergeCells(1, 1, 1, TOTAL_COLS)
   const titleCell = ws.getCell('A1')
   titleCell.value = `EXECUTIVE HEALTH CHECKUP — DAILY REPORT  (${dateLabel})`
   styleCell(titleCell, { ...FONT, size: 13, bold: true }, 'center')
@@ -118,10 +118,8 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
       p.doctor_name || '—',
       p.package_cost !== null ? p.package_cost : 0,
       p.op_bills !== null && p.op_bills !== undefined ? p.op_bills : '',
-      '',
       p.in_time,
       p.out_time || '',
-      '', // TOTAL PATIENTS column — merged later
     ]
     vals.forEach((v, i) => {
       const cell = row.getCell(i + 1)
@@ -132,23 +130,14 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
         cell.numFmt = '0'
       }
       if (i === 7 && typeof v === 'number') {
-        cell.numFmt = '0.00'
+        cell.numFmt = '0.##'
       }
     })
     row.height = 20
   })
 
-  /* Total Patients — merged column at the far right */
-  const totalColIndex = TOTAL_COLS // last column
-  const lastDataRow = patients.length + 2
-  ws.mergeCells(1, totalColIndex, lastDataRow, totalColIndex)
-  const totalMergeCell = ws.getCell(1, totalColIndex)
-  totalMergeCell.value = patients.length
-  styleCell(totalMergeCell, { ...FONT, size: 16, bold: true }, 'center')
-  totalMergeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
-
   /* Column widths */
-  const colWidths = [6, 22, 28, 14, 24, 24, 14, 10, 4, 10, 10, 14]
+  const colWidths = [6, 22, 28, 14, 24, 24, 14, 10, 10, 10]
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
   /* Download */
@@ -164,13 +153,12 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
 
 // ─── Clipboard ───────────────────────────────────────
 function copyToClipboard(patients: ReportPatient[], _dateLabel: string) {
-  const count = patients.length
   const today = new Date()
   const dd = String(today.getDate()).padStart(2, '0')
   const mm = String(today.getMonth() + 1).padStart(2, '0')
   const dateStr = `${dd}-${mm}-${today.getFullYear()}`
 
-  const rows = patients.map((p, idx) =>
+  const rows = patients.map((p) =>
     [
       dateStr,
       uppercaseName(p.name),
@@ -179,10 +167,8 @@ function copyToClipboard(patients: ReportPatient[], _dateLabel: string) {
       p.doctor_name || '—',
       p.package_cost !== null ? p.package_cost : '',
       p.op_bills !== null && p.op_bills !== undefined ? p.op_bills : '',
-      '',
       p.in_time,
       p.out_time || '',
-      idx === 0 ? count : '', // total count in first data row only
     ].join('\t')
   )
   const text = rows.join('\n')
