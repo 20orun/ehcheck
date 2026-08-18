@@ -109,7 +109,7 @@ type Action =
   | { type: 'UPDATE_DEPT_OFFLINE'; payload: { deptId: string; isOffline: boolean } }
   | { type: 'UPSERT_PATIENT'; payload: Patient }
   | { type: 'UPSERT_TASK'; payload: PatientTask }
-  | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null } }
+  | { type: 'UPDATE_PATIENT_INFO'; payload: { patientId: string; name: string; uhid: string; phone: string | null; opBills?: number | null } }
   | { type: 'UPDATE_PATIENT_INTERNATIONAL'; payload: { patientId: string; isInternational: boolean } }
   | { type: 'UPDATE_PATIENT_PPBS_TIME'; payload: { patientId: string; ppbsTime: string | null } }
   | { type: 'UPDATE_PATIENT_NEW'; payload: { patientId: string; isNew: boolean } }
@@ -312,7 +312,13 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         patients: state.patients.map((p) =>
           p.id === action.payload.patientId
-            ? { ...p, name: action.payload.name, uhid: action.payload.uhid, phone: action.payload.phone }
+            ? {
+                ...p,
+                name: action.payload.name,
+                uhid: action.payload.uhid,
+                phone: action.payload.phone,
+                ...(action.payload.opBills !== undefined ? { op_bills: action.payload.opBills } : {}),
+              }
             : p
         ),
       }
@@ -463,7 +469,7 @@ interface AppContextType {
   registerPatient: (name: string, uhid: string, phone: string | null, packageId: string | null, priority: Priority) => void
   checkInNewPatient: (name: string) => void
   updatePatientGroup: (patientId: string, groupId: string | null) => void
-  updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null) => void
+  updatePatientInfo: (patientId: string, name: string, uhid: string, phone: string | null, opBills?: number | null) => void
   updatePatientInternational: (patientId: string, isInternational: boolean) => void
   updatePatientNew: (patientId: string, isNew: boolean) => void
   updatePatientRegistered: (patientId: string, isRegistered: boolean) => void
@@ -582,7 +588,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Refs used for reconnect logic
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstSubscribeRef = useRef(true)
   const channelStatusRef = useRef<string>('SUBSCRIBING')
 
@@ -601,14 +606,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    function subscribeChannel() {
-      // Tear down any existing channel before creating a fresh one
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
-      const channel = supabase
-        .channel('hcheck-realtime')
+    const channel = supabase.channel('hcheck-realtime')
+    channelRef.current = channel
+
+    channel
       // Department offline toggle
       .on(
         'postgres_changes',
@@ -765,34 +766,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
               silentResync()
             }
             isFirstSubscribeRef.current = false
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn('[Realtime] Channel lost (' + status + ') – reconnecting in 3s')
-            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
-            reconnectTimerRef.current = setTimeout(() => { subscribeChannel() }, 3000)
           }
         })
-      channelRef.current = channel
-    }
 
-    subscribeChannel()
-
-    // When the tab becomes visible again, check whether the channel is still
-    // healthy. If it dropped while in the background, reconnect and resync.
-    // This does NOT do a full page reload – only patches in missing events.
+    // When the tab becomes visible again, supabase-js reconnects automatically
+    // and the SUBSCRIBED handler above runs a resync. If the channel is not yet
+    // healthy, do a background resync to catch up on any missed changes.
     function handleVisibilityChange() {
       if (document.visibilityState !== 'visible') return
       if (channelStatusRef.current !== 'SUBSCRIBED') {
-        console.log('[Realtime] Tab visible, channel status:', channelStatusRef.current, '– reconnecting')
-        subscribeChannel()
+        console.log('[Realtime] Tab visible, channel status:', channelStatusRef.current, '– resyncing')
+        silentResync()
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
-      if (channelRef.current) supabase.removeChannel(channelRef.current)
+      const ch = channelRef.current
       channelRef.current = null
+      if (ch) supabase.removeChannel(ch)
     }
   }, [silentResync]) // silentResync is a stable callback; selectedDate via ref
 
@@ -1662,9 +1655,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const updatePatientInfo = useCallback(
-    (patientId: string, name: string, uhid: string, phone: string | null) => {
-      dispatch({ type: 'UPDATE_PATIENT_INFO', payload: { patientId, name, uhid, phone } })
-      updatePatientInfoDb(patientId, { name, uhid, phone }).catch((err) =>
+    (patientId: string, name: string, uhid: string, phone: string | null, opBills?: number | null) => {
+      const opBillsPatch = opBills !== undefined ? { opBills } : {}
+      dispatch({ type: 'UPDATE_PATIENT_INFO', payload: { patientId, name, uhid, phone, ...opBillsPatch } })
+      updatePatientInfoDb(patientId, { name, uhid, phone, ...(opBills !== undefined ? { op_bills: opBills } : {}) }).catch((err) =>
         console.warn('Failed to persist patient info update:', err)
       )
     },

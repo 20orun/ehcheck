@@ -15,6 +15,7 @@ type ReportPatient = {
   assigned_doctor: DoctorCode
   doctor_name: string
   package_cost: number | null
+  op_bills: number | null
   in_time: string
   out_time: string
 }
@@ -71,7 +72,7 @@ function styleCell(cell: ExcelJS.Cell, font: Partial<ExcelJS.Font>, hAlign: 'cen
   cell.alignment = { horizontal: hAlign, vertical: 'middle', wrapText: true }
 }
 
-const COL_HEADERS = ['SL. NO', 'DATE', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', '', 'IN TIME', 'OUT TIME', 'TOTAL PATIENTS']
+const COL_HEADERS = ['SL. NO', 'DATE', 'PATIENT NAME', 'UHID', 'PACKAGE', 'DOCTOR ASSIGNED', 'PACKAGE COST', 'OP BILLS', '', 'IN TIME', 'OUT TIME', 'TOTAL PATIENTS']
 const TOTAL_COLS = COL_HEADERS.length
 
 async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: string) {
@@ -116,6 +117,7 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
       p.package_name || '—',
       p.doctor_name || '—',
       p.package_cost !== null ? p.package_cost : 0,
+      p.op_bills !== null && p.op_bills !== undefined ? p.op_bills : '',
       '',
       p.in_time,
       p.out_time || '',
@@ -124,10 +126,13 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
     vals.forEach((v, i) => {
       const cell = row.getCell(i + 1)
       cell.value = v
-      const hAlign = i === 0 ? 'center' : i === 6 ? 'right' : 'left'
+      const hAlign = i === 0 ? 'center' : i === 6 || i === 7 ? 'right' : 'left'
       styleCell(cell, FONT, hAlign)
       if (i === 6 && typeof v === 'number') {
         cell.numFmt = '0'
+      }
+      if (i === 7 && typeof v === 'number') {
+        cell.numFmt = '0.00'
       }
     })
     row.height = 20
@@ -143,7 +148,7 @@ async function downloadDailyReportExcel(patients: ReportPatient[], dateLabel: st
   totalMergeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
 
   /* Column widths */
-  const colWidths = [6, 22, 28, 14, 24, 24, 14, 4, 10, 10, 14]
+  const colWidths = [6, 22, 28, 14, 24, 24, 14, 10, 4, 10, 10, 14]
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
   /* Download */
@@ -173,6 +178,7 @@ function copyToClipboard(patients: ReportPatient[], _dateLabel: string) {
       p.package_name || '—',
       p.doctor_name || '—',
       p.package_cost !== null ? p.package_cost : '',
+      p.op_bills !== null && p.op_bills !== undefined ? p.op_bills : '',
       '',
       p.in_time,
       p.out_time || '',
@@ -207,6 +213,7 @@ export default function DailyReport() {
         assigned_doctor: p.assigned_doctor,
         doctor_name: getDoctorName(p.assigned_doctor),
         package_cost: pkg?.price ?? null,
+        op_bills: p.op_bills ?? null,
         in_time: new Date(p.checked_in_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
         out_time: p.tracker_cell_states?.['out'] || getConsultOutTime(p.id, state.patientTasks),
       }
@@ -274,6 +281,7 @@ export default function DailyReport() {
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Package</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Doctor Assigned</th>
               <th className="text-right px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Package Cost</th>
+              <th className="text-right px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">OP Bills</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">In Time</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 whitespace-nowrap">Out Time</th>
             </tr>
@@ -287,6 +295,7 @@ export default function DailyReport() {
                 <td className="px-3 py-3 text-gray-700">{p.package_name || '—'}</td>
                 <td className="px-3 py-3 text-gray-700">{p.doctor_name || '—'}</td>
                 <td className="px-3 py-3 text-gray-700 text-right font-mono">{formatCost(p.package_cost)}</td>
+                <td className="px-3 py-3 text-gray-700 text-right font-mono">{p.op_bills !== null && p.op_bills !== undefined ? p.op_bills : ''}</td>
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.in_time}</td>
                 <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{p.out_time || ''}</td>
               </tr>
@@ -294,7 +303,7 @@ export default function DailyReport() {
           </tbody>
           <tfoot>
             <tr className="bg-gray-50 border-t border-gray-200">
-              <td colSpan={8} className="px-3 py-3 text-center font-semibold text-gray-900">
+              <td colSpan={9} className="px-3 py-3 text-center font-semibold text-gray-900">
                 Total Patients: {filteredPatients.length}{searchQuery.trim() ? ` (of ${patients.length})` : ''}
               </td>
             </tr>

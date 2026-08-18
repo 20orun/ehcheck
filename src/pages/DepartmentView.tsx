@@ -131,7 +131,7 @@ export default function DepartmentView() {
   // Edit / billing modal state
   // editEntries: one entry per patient (group billing has multiple)
   // editIsStart: true when opened via Start button → start+complete on save
-  type EditEntry = { patientId: string; taskId?: string; name: string; uhid: string; phone: string; pkgId: string | null }
+  type EditEntry = { patientId: string; taskId?: string; name: string; uhid: string; phone: string; pkgId: string | null; opBills: string }
   const [editEntries, setEditEntries] = useState<EditEntry[] | null>(null)
   const [editIsStart, setEditIsStart] = useState(false)
   const [editPkgSearch, setEditPkgSearch] = useState<Record<string, string>>({})
@@ -379,6 +379,7 @@ export default function DepartmentView() {
                     uhid: gp.uhid ?? '',
                     phone: gp.phone ?? '',
                     pkgId: gp.package_id ?? null,
+                    opBills: gp.op_bills != null ? String(gp.op_bills) : '',
                   })))
                   setEditIsStart(true)
                   setEditPkgSearch({})
@@ -453,6 +454,7 @@ export default function DepartmentView() {
                             uhid: p.uhid ?? '',
                             phone: p.phone ?? '',
                             pkgId: p.package_id ?? null,
+                            opBills: p.op_bills != null ? String(p.op_bills) : '',
                           }])
                           setEditIsStart(false)
                           setEditPkgSearch({})
@@ -716,6 +718,20 @@ export default function DepartmentView() {
                         )
                       })()}
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        OP Bills <span className="text-gray-400 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={entry.opBills}
+                        onChange={(e) => updateEntry(entry.patientId, { opBills: e.target.value })}
+                        placeholder="Enter OP bills amount"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
                   </div>
                 )
               })}
@@ -726,8 +742,16 @@ export default function DepartmentView() {
                 onClick={() => {
                   editEntries.forEach((entry) => {
                     const currentPatient = queue.find((p) => p.id === entry.patientId)
+                    const opBillsRaw = entry.opBills.trim()
+                    const opBills = opBillsRaw === '' ? null : Number(opBillsRaw)
                     if (entry.name.trim()) {
-                      updatePatientInfo(entry.patientId, entry.name.trim(), entry.uhid.trim(), entry.phone.trim() || null)
+                      updatePatientInfo(
+                        entry.patientId,
+                        entry.name.trim(),
+                        entry.uhid.trim(),
+                        entry.phone.trim() || null,
+                        opBills !== null && !Number.isNaN(opBills) ? opBills : null
+                      )
                     }
                     if (entry.pkgId && entry.pkgId !== currentPatient?.package_id) {
                       updatePatientPackage(entry.patientId, entry.pkgId)

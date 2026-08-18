@@ -92,7 +92,7 @@ export async function fetchPackageSteps(): Promise<PackageStep[]> {
 export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
   let query = supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, op_bills, tracker_cell_states')
     .order('created_at')
   if (clinicDate) {
     query = query.eq('clinic_date', clinicDate)
@@ -113,40 +113,72 @@ export async function fetchPatients(clinicDate?: string): Promise<Patient[]> {
     clinic_date: p.clinic_date,
     group_id: p.group_id ?? null,
     ppbs_time: p.ppbs_time ?? null,
+    op_bills: p.op_bills ?? null,
     tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
     is_new: p.is_new ?? false,
     is_registered: p.is_registered ?? false,
   }))
 }
 
-export async function fetchPatientTasks(patientIds?: string[]): Promise<PatientTask[]> {
-  let query = supabase
-    .from('patient_tasks')
-    .select('id, patient_id, step_id, department_id, task_group, status, is_mandatory, skipped, started_at, completed_at, step_order, step_name')
-    .order('patient_id')
-    .order('step_order')
-  if (patientIds && patientIds.length > 0) {
-    query = query.in('patient_id', patientIds)
-  } else if (patientIds && patientIds.length === 0) {
-    // No patients for this date – return empty
-    return []
-  }
-  const { data, error } = await query
-  if (error) throw error
-  return (data ?? []).map((t) => ({
-    id: t.id,
-    patient_id: t.patient_id,
-    step_id: t.step_id,
-    department_id: t.department_id,
+const PATIENT_TASK_SELECT = 'id, patient_id, step_id, department_id, task_group, status, is_mandatory, skipped, started_at, completed_at, step_order, step_name'
+
+function mapPatientTask(t: Record<string, unknown>): PatientTask {
+  return {
+    id: t.id as string,
+    patient_id: t.patient_id as string,
+    step_id: (t.step_id as string) ?? null,
+    department_id: t.department_id as string,
     task_group: t.task_group as TaskGroup,
     status: t.status as TaskStatus,
-    is_mandatory: t.is_mandatory,
-    skipped: t.skipped,
-    started_at: t.started_at,
-    completed_at: t.completed_at,
-    step_order: t.step_order,
-    step_name: t.step_name,
-  }))
+    is_mandatory: t.is_mandatory as boolean,
+    skipped: t.skipped as boolean,
+    started_at: (t.started_at as string) ?? null,
+    completed_at: (t.completed_at as string) ?? null,
+    step_order: t.step_order as number,
+    step_name: t.step_name as string,
+  }
+}
+
+export async function fetchPatientTasks(patientIds?: string[]): Promise<PatientTask[]> {
+  // No patients to fetch for
+  if (patientIds && patientIds.length === 0) {
+    return []
+  }
+
+  // Fetch everything when no filter is provided
+  if (!patientIds) {
+    const { data, error } = await supabase
+      .from('patient_tasks')
+      .select(PATIENT_TASK_SELECT)
+      .order('patient_id')
+      .order('step_order')
+    if (error) throw error
+    return (data ?? []).map((t) => mapPatientTask(t as Record<string, unknown>))
+  }
+
+  // Chunk the IN filter so the request URL stays under PostgREST limits
+  // (a single month can contain hundreds of patients).
+  const CHUNK_SIZE = 100
+  const chunks: string[][] = []
+  for (let i = 0; i < patientIds.length; i += CHUNK_SIZE) {
+    chunks.push(patientIds.slice(i, i + CHUNK_SIZE))
+  }
+
+  const all: PatientTask[] = []
+  for (const chunk of chunks) {
+    const { data, error } = await supabase
+      .from('patient_tasks')
+      .select(PATIENT_TASK_SELECT)
+      .in('patient_id', chunk)
+      .order('patient_id')
+      .order('step_order')
+    if (error) throw error
+    for (const t of data ?? []) {
+      all.push(mapPatientTask(t as Record<string, unknown>))
+    }
+  }
+
+  return all
 }
 
 // ─── Load all data at once ───────────────────────────
@@ -181,7 +213,7 @@ export async function fetchPatientsByMonth(yearMonth: string): Promise<Patient[]
 
   const { data, error } = await supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, op_bills, tracker_cell_states')
     .gte('clinic_date', startDate)
     .lte('clinic_date', endDate)
     .order('created_at')
@@ -200,6 +232,7 @@ export async function fetchPatientsByMonth(yearMonth: string): Promise<Patient[]
     clinic_date: p.clinic_date,
     group_id: p.group_id ?? null,
     ppbs_time: p.ppbs_time ?? null,
+    op_bills: p.op_bills ?? null,
     tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
     is_new: p.is_new ?? false,
     is_registered: p.is_registered ?? false,
@@ -221,7 +254,7 @@ export async function fetchClinicDates(): Promise<string[]> {
 export async function fetchPatientById(id: string): Promise<Patient | null> {
   const { data, error } = await supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, op_bills, tracker_cell_states')
     .eq('id', id)
     .maybeSingle()
   if (error) throw error
@@ -241,6 +274,7 @@ export async function fetchPatientById(id: string): Promise<Patient | null> {
     clinic_date: p.clinic_date,
     group_id: p.group_id ?? null,
     ppbs_time: p.ppbs_time ?? null,
+    op_bills: p.op_bills ?? null,
     tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
     is_new: p.is_new ?? false,
     is_registered: p.is_registered ?? false,
@@ -254,7 +288,7 @@ export async function searchPatientsByName(name: string, limit = 200): Promise<P
   const pattern = `%${q}%`
   const { data, error } = await supabase
     .from('patients')
-    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, tracker_cell_states')
+    .select('id, name, uhid, phone, package_id, assigned_doctor, priority, is_international, is_new, is_registered, created_at, checked_in_at, clinic_date, group_id, ppbs_time, op_bills, tracker_cell_states')
     .ilike('name', pattern)
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -273,6 +307,7 @@ export async function searchPatientsByName(name: string, limit = 200): Promise<P
     clinic_date: p.clinic_date,
     group_id: p.group_id ?? null,
     ppbs_time: p.ppbs_time ?? null,
+    op_bills: p.op_bills ?? null,
     tracker_cell_states: (p.tracker_cell_states as Record<string, string>) ?? {},
     is_new: p.is_new ?? false,
     is_registered: p.is_registered ?? false,
@@ -295,6 +330,7 @@ export async function insertPatient(patient: Patient): Promise<void> {
     checked_in_at: patient.checked_in_at,
     clinic_date: patient.clinic_date,
     group_id: patient.group_id ?? null,
+    op_bills: patient.op_bills ?? null,
   })
   if (error) throw error
 }
@@ -341,7 +377,7 @@ export async function updateTrackerCellStateDb(
 
 export async function updatePatientInfoDb(
   patientId: string,
-  fields: { name?: string; uhid?: string; phone?: string | null }
+  fields: { name?: string; uhid?: string; phone?: string | null; op_bills?: number | null }
 ): Promise<void> {
   const { error } = await supabase.from('patients').update(fields).eq('id', patientId)
   if (error) throw error

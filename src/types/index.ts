@@ -108,6 +108,7 @@ export interface Patient {
   clinic_date: string // YYYY-MM-DD
   group_id: string | null  // set when patients check in together
   ppbs_time: string | null
+  op_bills: number | null  // optional OP (outpatient) bills captured during billing
   tracker_cell_states: Record<string, string>  // 'tick' | 'yellow' per tracker column key
   is_new: boolean
   is_registered: boolean

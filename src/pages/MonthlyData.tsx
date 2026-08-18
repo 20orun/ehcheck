@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
-import { fetchPatientsByMonth, fetchPackages } from '@/lib/db'
-import type { Patient, Package } from '@/types'
+import { fetchPatientsByMonth, fetchPackages, fetchPatientTasks } from '@/lib/db'
+import type { Patient, Package, PatientTask } from '@/types'
 
 /** Strip MALE / FEMALE suffix to get base package name (same as DailyReport) */
 function basePackageName(packageName: string): string {
@@ -19,6 +19,7 @@ export default function MonthlyData() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1) // 1-12
   const [packages, setPackages] = useState<Package[]>([])
   const [patients, setPatients] = useState<Patient[]>([])
+  const [patientTasks, setPatientTasks] = useState<PatientTask[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,9 +39,12 @@ export default function MonthlyData() {
       const yearMonth = `${year}-${mm}`
       const pts = await fetchPatientsByMonth(yearMonth)
       setPatients(pts)
+      const tasks = pts.length > 0 ? await fetchPatientTasks(pts.map((p) => p.id)) : []
+      setPatientTasks(tasks)
     } catch (err) {
       setError('Failed to load monthly data')
       setPatients([])
+      setPatientTasks([])
     } finally {
       setLoading(false)
     }
@@ -79,6 +83,24 @@ export default function MonthlyData() {
 
   const entries = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1])
   const totalPatients = patients.length
+
+  // Monthly average TAT: check-in → CONSULT task completion (same as dashboard)
+  const tatPatients = patients.filter((p) => {
+    const consultTask = patientTasks.find(
+      (t) => t.patient_id === p.id && t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at
+    )
+    return p.checked_in_at && consultTask
+  })
+  const avgTAT =
+    tatPatients.length > 0
+      ? tatPatients.reduce((sum, p) => {
+          const checkedIn = new Date(p.checked_in_at!).getTime()
+          const consultTask = patientTasks.find(
+            (t) => t.patient_id === p.id && t.task_group === 'CONSULT' && t.status === 'COMPLETED' && t.completed_at
+          )
+          return sum + (new Date(consultTask!.completed_at!).getTime() - checkedIn) / 60000
+        }, 0) / tatPatients.length
+      : 0
 
   // Generate year options: ±5 years from current
   const currentYear = now.getFullYear()
@@ -164,7 +186,19 @@ export default function MonthlyData() {
 
       {/* Data table */}
       {!loading && !error && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <>
+          {/* Monthly Average TAT */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm text-gray-500">Monthly Average TAT</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {avgTAT > 0 ? `${Math.round(avgTAT)} min` : '—'}
+              </p>
+            </div>
+            <p className="text-xs text-gray-400">Check-in → physician consultation completion</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
@@ -201,7 +235,8 @@ export default function MonthlyData() {
               </tfoot>
             )}
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   )
