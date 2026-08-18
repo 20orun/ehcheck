@@ -728,8 +728,9 @@ export default function DepartmentView() {
                         min="0"
                         value={entry.opBills}
                         onChange={(e) => updateEntry(entry.patientId, { opBills: e.target.value })}
+                        onWheel={(e) => e.currentTarget.blur()}
                         placeholder="Enter OP bills amount"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        className="no-spinner w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                   </div>
